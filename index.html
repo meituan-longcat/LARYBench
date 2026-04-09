@@ -1,620 +1,774 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LARY Benchmark - Multimodal Understanding Evaluation</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LARY Benchmark</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-  <!-- Bulma CSS -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+:root {
+  --bg: #08090d;
+  --bg-card: #0f1118;
+  --bg-card-hover: #151824;
+  --border: #1e2235;
+  --border-glow: #2a3a6a;
+  --text: #e2e4ed;
+  --text-dim: #7a7f96;
+  --accent: #4f8aff;
+  --accent2: #00e4a0;
+  --accent3: #a855f7;
+  --gold: #fbbf24;
+  --silver: #94a3b8;
+  --bronze: #d97706;
+  --font-display: 'Outfit', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
 
-  <!-- FontAwesome Icons -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+html { scroll-behavior: smooth; }
 
-  <!-- MathJax for LaTeX rendering -->
-  <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
-  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-display);
+  line-height: 1.6;
+  overflow-x: hidden;
+}
 
-  <style>
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    }
+/* === GRID BACKGROUND === */
+.grid-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background-image:
+    linear-gradient(rgba(79,138,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(79,138,255,0.03) 1px, transparent 1px);
+  background-size: 60px 60px;
+  pointer-events: none;
+}
 
-    .hero-title {
-      font-size: 3rem;
-      font-weight: 700;
-      line-height: 1.2;
-      margin-bottom: 1.5rem;
-      color: white;
-    }
+/* === NAV === */
+nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  padding: 1rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  backdrop-filter: blur(20px);
+  background: rgba(8,9,13,0.7);
+  border-bottom: 1px solid var(--border);
+}
+nav .logo {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--accent);
+  letter-spacing: 2px;
+}
+nav .logo span { color: var(--text-dim); }
+nav .links { display: flex; gap: 1.5rem; }
+nav .links a {
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: 0.85rem;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  transition: color 0.2s;
+}
+nav .links a:hover { color: var(--accent); }
 
-    .author-block {
-      font-size: 1.1rem;
-      margin-bottom: 0.5rem;
-      color: white;
-    }
+/* === HERO === */
+.hero {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 6rem 2rem 4rem;
+  z-index: 1;
+}
+.hero::before {
+  content: '';
+  position: absolute;
+  top: -200px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 800px;
+  height: 800px;
+  background: radial-gradient(circle, rgba(79,138,255,0.12) 0%, rgba(168,85,247,0.06) 40%, transparent 70%);
+  pointer-events: none;
+}
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 1rem;
+  background: rgba(79,138,255,0.08);
+  border: 1px solid rgba(79,138,255,0.2);
+  border-radius: 100px;
+  font-size: 0.8rem;
+  font-family: var(--font-mono);
+  color: var(--accent);
+  margin-bottom: 2rem;
+  animation: fadeInDown 0.6s ease-out;
+}
+.hero-badge .dot {
+  width: 6px; height: 6px;
+  background: var(--accent2);
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
 
-    .author-block sup {
-      color: rgba(255,255,255,0.85);
-    }
+h1.hero-title {
+  font-size: clamp(2.5rem, 6vw, 5rem);
+  font-weight: 800;
+  line-height: 1.1;
+  margin-bottom: 1.5rem;
+  animation: fadeInUp 0.8s ease-out;
+  letter-spacing: -1px;
+}
+h1.hero-title .gradient {
+  background: linear-gradient(135deg, var(--accent), var(--accent3), var(--accent2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
 
-    .button-row {
-      display: flex;
-      justify-content: center;
-      gap: 1rem;
-      flex-wrap: wrap;
-      margin-top: 2rem;
-    }
+.hero-subtitle {
+  max-width: 700px;
+  color: var(--text-dim);
+  font-size: 1.1rem;
+  line-height: 1.8;
+  margin-bottom: 2.5rem;
+  animation: fadeInUp 0.8s ease-out 0.1s both;
+}
 
-    .custom-button {
-      color: white !important;
-      border-radius: 25px;
-      padding: 0.75rem 1.5rem;
-      text-decoration: none;
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      transition: filter 0.2s;
-      font-weight: 500;
-    }
+.hero-buttons {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-bottom: 4rem;
+  animation: fadeInUp 0.8s ease-out 0.2s both;
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1.6rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.25s;
+  font-family: var(--font-display);
+  cursor: pointer;
+  border: none;
+}
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 0 20px rgba(79,138,255,0.3);
+}
+.btn-primary:hover {
+  box-shadow: 0 0 30px rgba(79,138,255,0.5);
+  transform: translateY(-1px);
+}
+.btn-ghost {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.btn-ghost:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
 
-    .custom-button:hover {
-      color: white !important;
-      filter: brightness(1.15);
-    }
+/* === STATS BAR === */
+.stats-bar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  max-width: 900px;
+  width: 100%;
+  background: var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  animation: fadeInUp 0.8s ease-out 0.3s both;
+}
+.stat {
+  background: var(--bg-card);
+  padding: 1.5rem 1rem;
+  text-align: center;
+}
+.stat-value {
+  font-family: var(--font-mono);
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--accent);
+  margin-bottom: 0.3rem;
+}
+.stat:nth-child(2) .stat-value { color: var(--accent2); }
+.stat:nth-child(3) .stat-value { color: var(--accent3); }
+.stat:nth-child(4) .stat-value { color: var(--gold); }
+.stat-label {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
 
-    .btn-paper      { background-color: #111111; }
-    .btn-arxiv      { background-color: #111111; }
-    .btn-code       { background-color: #111111; }
-    .btn-dataset    { background-color: #111111; }
-    .btn-leaderboard{ background-color: #111111; }
+/* === SECTION === */
+section {
+  position: relative;
+  z-index: 1;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 5rem 2rem;
+}
+.section-label {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  margin-bottom: 0.8rem;
+}
+.section-title {
+  font-size: 2.2rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  letter-spacing: -0.5px;
+}
+.section-desc {
+  color: var(--text-dim);
+  max-width: 700px;
+  margin-bottom: 3rem;
+  font-size: 1rem;
+}
 
-    .section-title {
-      font-size: 2rem;
-      font-weight: 600;
-      margin-bottom: 1.5rem;
-      text-align: center;
-    }
+/* === ABSTRACT === */
+.abstract-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 2.5rem;
+  position: relative;
+  overflow: hidden;
+}
+.abstract-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent), var(--accent3), var(--accent2));
+}
+.abstract-card p {
+  color: var(--text-dim);
+  line-height: 1.9;
+  font-size: 0.95rem;
+}
+.abstract-card strong { color: var(--text); }
 
-    .abstract-text {
-      font-size: 1.1rem;
-      line-height: 1.8;
-      max-width: 900px;
-      margin: 0 auto 1.5rem;
-      text-align: justify;
-    }
+/* === OVERVIEW IMAGE === */
+.overview-img {
+  margin-top: 3rem;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.overview-img img {
+  width: 100%;
+  display: block;
+}
 
-    .sample-card {
-      background: white;
-      border: 1px solid #dbdbdb;
-      border-radius: 8px;
-      padding: 2rem;
-      margin-bottom: 2rem;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
+/* === LEADERBOARD === */
+.leaderboard-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 2rem;
+}
+.tab {
+  padding: 0.6rem 1.4rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--font-display);
+  transition: all 0.2s;
+}
+.tab.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.tab:hover:not(.active) { border-color: var(--text-dim); color: var(--text); }
 
-    .media-container {
-      display: flex;
-      gap: 1rem;
-      margin-bottom: 1.5rem;
-      flex-wrap: wrap;
-    }
+.table-wrap {
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  background: var(--bg-card);
+}
+.table-wrap table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.table-wrap th {
+  background: rgba(79,138,255,0.06);
+  padding: 0.9rem 1rem;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+}
+.table-wrap td {
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid rgba(30,34,53,0.5);
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+.table-wrap tr:hover td { background: var(--bg-card-hover); }
+.table-wrap tr.rank-1 td { color: var(--text); }
+.table-wrap .model-name { color: var(--text); font-weight: 600; }
+.table-wrap .rank-medal { font-size: 1rem; }
+.table-wrap .best-val { color: var(--accent2); font-weight: 700; }
+.table-wrap .paradigm-tag {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  letter-spacing: 0.5px;
+}
+.paradigm-tag.semantic { background: rgba(79,138,255,0.12); color: var(--accent); }
+.paradigm-tag.general { background: rgba(168,85,247,0.12); color: var(--accent3); }
+.paradigm-tag.pixel { background: rgba(0,228,160,0.1); color: var(--accent2); }
+.paradigm-tag.embodied { background: rgba(251,191,36,0.1); color: var(--gold); }
 
-    .media-container video,
-    .media-container audio {
-      flex: 1;
-      min-width: 250px;
-      max-width: 100%;
-    }
+.hidden { display: none; }
 
-    .question-text {
-      font-size: 1.2rem;
-      font-weight: 600;
-      margin-bottom: 1rem;
-      color: #363636;
-    }
+/* === KEY FINDINGS === */
+.findings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.5rem;
+}
+.finding-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 2rem;
+  transition: all 0.3s;
+  position: relative;
+  overflow: hidden;
+}
+.finding-card:hover {
+  border-color: var(--border-glow);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+}
+.finding-card .num {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--accent);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 0.8rem;
+}
+.finding-card h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  line-height: 1.4;
+}
+.finding-card p {
+  color: var(--text-dim);
+  font-size: 0.88rem;
+  line-height: 1.8;
+}
+.finding-card .highlight {
+  color: var(--text);
+  font-weight: 600;
+}
 
-    .options-list {
-      list-style: none;
-      padding: 0;
-      margin-bottom: 1rem;
-    }
+.finding-card:nth-child(1)::before,
+.finding-card:nth-child(2)::before,
+.finding-card:nth-child(3)::before,
+.finding-card:nth-child(4)::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+}
+.finding-card:nth-child(1)::before { background: var(--accent); }
+.finding-card:nth-child(2)::before { background: var(--accent2); }
+.finding-card:nth-child(3)::before { background: var(--accent3); }
+.finding-card:nth-child(4)::before { background: var(--gold); }
 
-    .options-list li {
-      padding: 0.5rem 0;
-      font-size: 1.05rem;
-    }
+/* === DATASET === */
+.dataset-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+  margin-top: 2rem;
+}
+.dataset-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: all 0.3s;
+}
+.dataset-card:hover {
+  border-color: var(--border-glow);
+  transform: translateY(-2px);
+}
+.dataset-card img { width: 100%; display: block; }
+.dataset-card .card-body { padding: 1.2rem; }
+.dataset-card h4 { font-size: 0.95rem; margin-bottom: 0.4rem; }
+.dataset-card p { font-size: 0.8rem; color: var(--text-dim); }
 
-    .answer-highlight {
-      background-color: #48c774;
-      color: white;
-      padding: 0.5rem 1rem;
-      border-radius: 5px;
-      display: inline-block;
-      font-weight: 600;
-    }
+/* === CITATION === */
+.citation-block {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.5rem;
+  position: relative;
+}
+.citation-block pre {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  overflow-x: auto;
+  line-height: 1.7;
+}
+.copy-btn {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.75rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-dim);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  transition: all 0.2s;
+}
+.copy-btn:hover { border-color: var(--accent); color: var(--accent); }
 
-    .bibtex-box {
-      background-color: #f5f5f5;
-      border: 1px solid #dbdbdb;
-      border-radius: 5px;
-      padding: 1.5rem;
-      overflow-x: auto;
-    }
+/* === FOOTER === */
+footer {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  padding: 3rem 2rem;
+  border-top: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 0.8rem;
+}
 
-    .bibtex-box code {
-      font-family: 'Courier New', monospace;
-      font-size: 0.9rem;
-    }
+/* === ANIMATIONS === */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 
-    .method-icon {
-      font-size: 1.5rem;
-      margin-right: 0.5rem;
-    }
-
-    .leaderboard-table {
-      max-width: 1000px;
-      margin: 0 auto;
-    }
-
-    .rank-1 {
-      background-color: #fffacd !important;
-      font-weight: 600;
-    }
-
-    .overview-img-wrapper {
-      text-align: center;
-      margin-top: 2rem;
-      overflow: hidden;
-    }
-
-    .overview-img-wrapper img {
-      max-width: 50%;
-      border-radius: 8px;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
-      transition: transform 0.3s ease;
-      cursor: zoom-in;
-    }
-
-    .overview-img-wrapper img:hover {
-      transform: scale(1.04);
-    }
-
-    /* Lightbox */
-    #lightbox {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.85);
-      z-index: 9999;
-      justify-content: center;
-      align-items: center;
-      cursor: zoom-out;
-    }
-
-    #lightbox.active {
-      display: flex;
-    }
-
-    #lightbox img {
-      max-width: 90vw;
-      max-height: 90vh;
-      border-radius: 6px;
-      box-shadow: 0 8px 40px rgba(0,0,0,0.6);
-      cursor: default;
-    }
-
-    #lightbox-close {
-      position: fixed;
-      top: 1.2rem;
-      right: 1.5rem;
-      color: white;
-      font-size: 2rem;
-      cursor: pointer;
-      line-height: 1;
-      user-select: none;
-    }
-  </style>
+/* === RESPONSIVE === */
+@media (max-width: 768px) {
+  .stats-bar { grid-template-columns: repeat(2, 1fr); }
+  .findings-grid { grid-template-columns: 1fr; }
+  .dataset-grid { grid-template-columns: 1fr; }
+  nav .links { display: none; }
+}
+</style>
 </head>
 <body>
+<div class="grid-bg"></div>
 
-  <!-- Header Section -->
-  <section class="hero is-medium" style="background: linear-gradient(to right, #1a6fd4, #f97316);">
-    <div class="hero-body">
-      <div class="container has-text-centered">
-        <h1 class="hero-title">
-          LARY: A Latent Action Representation Yielding Benchmark
-        </h1>
+<!-- NAV -->
+<nav>
+  <div class="logo">LARY<span>BENCH</span></div>
+  <div class="links">
+    <a href="#abstract">Abstract</a>
+    <a href="#leaderboard">Leaderboard</a>
+    <a href="#findings">Findings</a>
+    <a href="#dataset">Dataset</a>
+    <a href="#citation">Citation</a>
+  </div>
+</nav>
 
-        <div class="author-block">
-          <span>Dujun Nie<sup>*1</sup></span>,
-          <span>Fengjiao Chen<sup>*†1</sup></span>,
-          <span>Jun Kuang<sup>1</sup></span>,
-          <span>Qi Lv<sup>1</sup></span>,
-          <span>Xiaoyu Li<sup>1</sup></span>,
-          <span>Xuezhi Cao<sup>‡1</sup></span>
-        </div>
-
-        <div class="author-block" style="font-size: 1rem; color: white;">
-          <sup>1</sup>Meituan
-        </div>
-
-        <div class="author-block" style="font-size: 0.9rem; color: white; margin-top: 0.5rem;">
-          <sup>*</sup>Equal contribution
-        </div>
-
-        <div class="author-block" style="font-size: 0.9rem; color: white; margin-top: 0.5rem;">
-          <sup>†</sup>Project leader &nbsp;&nbsp; <sup>‡</sup>Corresponding author
-        </div>
-
-        <div class="button-row">
-          <a href="#" class="custom-button btn-paper">
-            <i class="fas fa-file-pdf"></i>
-            Paper
-          </a>
-          <a href="#" class="custom-button btn-arxiv">
-            <i class="fas fa-scroll"></i>
-            arXiv
-          </a>
-          <a href="#" class="custom-button btn-code">
-            <i class="fab fa-github"></i>
-            Code
-          </a>
-          <a href="#" class="custom-button btn-dataset">
-            <i class="fas fa-database"></i>
-            Dataset
-          </a>
-          <a href="#leaderboard" class="custom-button btn-leaderboard">
-            <i class="fas fa-trophy"></i>
-            Leaderboard
-          </a>
-        </div>
-      </div>
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-badge"><span class="dot"></span> Benchmark for Latent Action Models</div>
+  <h1 class="hero-title">
+    <span class="gradient">LARY</span><br>
+    A Latent Action Representation<br>Yielding Benchmark
+  </h1>
+  <p class="hero-subtitle">
+    A unified framework for evaluating latent action models on both low-level robotic actions and high-level semantic actions, spanning 1M+ videos and 151 action categories.
+  </p>
+  <div class="hero-buttons">
+    <a class="btn btn-primary" href="#">📄 Paper</a>
+    <a class="btn btn-ghost" href="#">arXiv</a>
+    <a class="btn btn-ghost" href="#">💻 Code</a>
+    <a class="btn btn-ghost" href="#">📦 Dataset</a>
+  </div>
+  <div class="stats-bar">
+    <div class="stat">
+      <div class="stat-value">1M+</div>
+      <div class="stat-label">Video Clips</div>
     </div>
-  </section>
-
-  <!-- Abstract Section -->
-  <section class="section">
-    <div class="container">
-      <h2 class="section-title">Abstract</h2>
-      <div class="content">
-        <p class="abstract-text">
-          Scarcity of action data severely limits the generalization of Vision-Language-Action (VLA) models. While Latent Action Models (LAMs) address this by extracting representations from large-scale videos, their capacity for fine-grained proprioceptive control and robust generalization remains largely unquantified.
-To bridge this gap, we introduce the <strong>Latent Action Representation Yielding (LARY) Benchmark</strong>, a unified framework for evaluating latent action models on both low-level robotic actions and high-level semantic actions. The comprehensively curated dataset encompasses over one million short videos (totaling &gt;1,000 hours) spanning 151 kinds of actions, alongside 620K image pairs and 595K motion trajectories, covering diverse embodiments and environments.
-Our experiment reveals two key insights: (i) General visual foundation models consistently outperform specialized embodied LAMs. (ii) Latent-based visual space is better aligned to robotic action space than pixel-based space. These demonstrate that robust latent actions naturally emerge from large-scale visual pre-training, and aligning control policies with the general visual features may be a promising way to VLA generalization.
-        </p>
-
-        <div class="overview-img-wrapper">
-          <img src="imgs/lary.jpg" alt="LARY overview figure">
-        </div>
-      </div>
+    <div class="stat">
+      <div class="stat-value">1,000+</div>
+      <div class="stat-label">Hours</div>
     </div>
-  </section>
-
-  <!-- Leaderboard Section -->
-  <section class="section" id="leaderboard">
-    <div class="container">
-      <h2 class="section-title">Leaderboard</h2>
-
-      <!-- Tab buttons -->
-      <div style="display:flex; justify-content:center; gap:1rem; margin-bottom:1.5rem;">
-        <button id="tab-cls" onclick="switchTab('cls')"
-          style="padding:0.5rem 1.5rem; border-radius:20px; border:2px solid #111; background:#111; color:white; font-weight:600; cursor:pointer;">
-          Classification Acc ↑
-        </button>
-        <button id="tab-reg" onclick="switchTab('reg')"
-          style="padding:0.5rem 1.5rem; border-radius:20px; border:2px solid #111; background:white; color:#111; font-weight:600; cursor:pointer;">
-          Regression MSE ↓
-        </button>
-      </div>
-
-      <div class="leaderboard-table">
-
-        <!-- Classification Table -->
-        <div id="table-cls">
-          <table class="table is-striped is-fullwidth is-hoverable">
-            <thead>
-              <tr>
-                <th>Rank</th>
-                <th>Model</th>
-                <th>Paradigm</th>
-                <th style="white-space:nowrap;">Params (M)</th>
-                <th style="white-space:nowrap;">Avg. Acc ↑</th>
-                <th style="white-space:nowrap;">Atomic Robot</th>
-                <th style="white-space:nowrap;">Composite Human</th>
-                <th style="white-space:nowrap;">Composite Robot</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr style="background:#fffacd; font-weight:600;">
-                <td>🥇 1</td><td>V-JEPA2</td><td>Semantic Encoder</td><td>303.89</td><td><strong>76.62</strong></td><td>79.09</td><td>80.35</td><td>70.43</td>
-              </tr>
-              <tr style="background:#f5f5f5;">
-                <td>🥈 2</td><td>DINOv3</td><td>Semantic Encoder</td><td>303.13</td><td><u>68.68</u></td><td>60.79</td><td>76.19</td><td>69.06</td>
-              </tr>
-              <tr>
-                <td>🥉 3</td><td>LAPA-DINOv3 </td><td>General LAM</td><td>472.45</td><td>49.17</td><td>56.27</td><td>64.19</td><td>27.04</td>
-              </tr>
-              <tr>
-                <td>4</td><td>LAPA-DINOv2 </td><td>General LAM</td><td>473.69</td><td>49.36</td><td>58.04</td><td>55.86</td><td>34.19</td>
-              </tr>
-              <tr>
-                <td>5</td><td>Wan2.2</td><td>Pixel Encoder</td><td>704.69</td><td>49.36</td><td>14.91</td><td>67.77</td><td>65.39</td>
-              </tr>
-              <tr>
-                <td>6</td><td>LAPA-SigLIP2 </td><td>General LAM</td><td>200.83</td><td>43.67</td><td>46.83</td><td>54.74</td><td>29.44</td>
-              </tr>
-              <tr>
-                <td>7</td><td>LAPA-MAGVIT2 </td><td>General LAM</td><td>116.40</td><td>40.78</td><td>33.12</td><td>59.70</td><td>29.53</td>
-              </tr>
-              <tr>
-                <td>8</td><td>FLUX.2-dev</td><td>Pixel Encoder</td><td>84.05</td><td>47.48</td><td>51.95</td><td>46.12</td><td>44.36</td>
-              </tr>
-              <tr>
-                <td>9</td><td>villa-X</td><td>Embodied LAM</td><td>238.71</td><td>20.90</td><td>15.00</td><td>17.80</td><td>29.90</td>
-              </tr>
-              <tr>
-                <td>10</td><td>LAPA</td><td>Embodied LAM</td><td>343.80</td><td>20.17</td><td>22.27</td><td>14.61</td><td>23.64</td>
-              </tr>
-              <tr>
-                <td>11</td><td>UniVLA</td><td>Embodied LAM</td><td>287.75</td><td>17.99</td><td>18.62</td><td>19.08</td><td>18.56</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <!-- Regression Table -->
-        <div id="table-reg" style="display:none;">
-          <table class="table is-striped is-fullwidth is-hoverable">
-            <thead>
-              <tr>
-                <th>Rank</th>
-                <th>Model</th>
-                <th>Paradigm</th>
-                <th style="white-space:nowrap;">Params (M)</th>
-                <th style="white-space:nowrap;">Avg. MSE ↓</th>
-                <th style="white-space:nowrap;">CALVIN</th>
-                <th style="white-space:nowrap;">VLABench</th>
-                <th style="white-space:nowrap;">RoboCOIN</th>
-                <th style="white-space:nowrap;">AgiBotWorld-Beta</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr style="background:#fffacd; font-weight:600;">
-                <td>🥇 1</td><td>DINOv3</td><td>Semantic Encoder</td><td>303.13</td><td><strong>0.19</strong></td><td>0.22</td><td>0.06</td><td>0.22</td><td>0.24</td>
-              </tr>
-              <tr style="background:#f5f5f5;">
-                <td>🥈 2</td><td>V-JEPA2</td><td>Semantic Encoder</td><td>303.89</td><td><u>0.25</u></td><td>0.27</td><td>0.07</td><td>0.32</td><td>0.33</td>
-              </tr>
-              <tr>
-                <td>🥉 3</td><td>Wan2.2</td><td>Pixel Encoder</td><td>704.69</td><td>0.30</td><td>0.39</td><td>0.09</td><td>0.34</td><td>0.39</td>
-              </tr>
-              <tr>
-                <td>4</td><td>FLUX.2-dev</td><td>Pixel Encoder</td><td>84.05</td><td>0.35</td><td>0.25</td><td>0.04</td><td>0.47</td><td>0.62</td>
-              </tr>
-              <tr>
-                <td>5</td><td>LAPA-DINOv3 </td><td>General LAM</td><td>472.45</td><td>0.60</td><td>0.50</td><td>0.25</td><td>0.82</td><td>0.84</td>
-              </tr>
-              <tr>
-                <td>6</td><td>LAPA-DINOv2 </td><td>General LAM</td><td>473.69</td><td>0.63</td><td>0.55</td><td>0.26</td><td>0.85</td><td>0.86</td>
-              </tr>
-              <tr>
-                <td>7</td><td>LAPA-MAGVIT2 </td><td>General LAM</td><td>116.40</td><td>0.65</td><td>0.59</td><td>0.36</td><td>0.80</td><td>0.83</td>
-              </tr>
-              <tr>
-                <td>8</td><td>LAPA-SigLIP2 </td><td>General LAM</td><td>200.83</td><td>0.65</td><td>0.57</td><td>0.30</td><td>0.86</td><td>0.88</td>
-              </tr>
-              <tr>
-                <td>9</td><td>villa-X</td><td>Embodied LAM</td><td>238.71</td><td>0.87</td><td>0.86</td><td>0.72</td><td>0.94</td><td>0.97</td>
-              </tr>
-              <tr>
-                <td>10</td><td>UniVLA</td><td>Embodied LAM</td><td>287.75</td><td>0.87</td><td>0.82</td><td>0.74</td><td>0.94</td><td>0.97</td>
-              </tr>
-              <tr>
-                <td>11</td><td>LAPA</td><td>Embodied LAM</td><td>343.80</td><td>0.97</td><td>0.96</td><td>0.95</td><td>0.96</td><td>1.00</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-      </div>
+    <div class="stat">
+      <div class="stat-value">151</div>
+      <div class="stat-label">Action Categories</div>
     </div>
-  </section>
-
-  <script>
-    function switchTab(tab) {
-      document.getElementById('table-cls').style.display = tab === 'cls' ? 'block' : 'none';
-      document.getElementById('table-reg').style.display = tab === 'reg' ? 'block' : 'none';
-      document.getElementById('tab-cls').style.background = tab === 'cls' ? '#111' : 'white';
-      document.getElementById('tab-cls').style.color = tab === 'cls' ? 'white' : '#111';
-      document.getElementById('tab-reg').style.background = tab === 'reg' ? '#111' : 'white';
-      document.getElementById('tab-reg').style.color = tab === 'reg' ? 'white' : '#111';
-    }
-  </script>
-
-  <!-- Key Findings Section -->
-  <section class="section" style="background-color: #fafafa;">
-    <div class="container">
-      <h2 class="section-title">Key Findings</h2>
-      <div style="max-width: 900px; margin: 0 auto; border: 2.5px solid #1a6fd4; border-radius: 12px; padding: 2rem 2.5rem; background: #fff; box-shadow: 0 4px 20px rgba(26,111,212,0.10);">
-        <div class="content">
-
-          <h3><span class="method-icon">💡</span>Finding 1: General Vision Encoders Outperform Embodied LAMs</h3>
-          <p>
-            General vision foundation models (V-JEPA 2: 76.62% Acc, DINOv3: 0.19 MSE) substantially outperform specialized Embodied LAMs (LAPA/UniVLA/villa-X: 18–21% Acc, 0.87–0.97 MSE). This demonstrates that <strong>robust latent action representations naturally emerge from large-scale visual self-supervised pre-training</strong>, even without explicit motion supervision.
-          </p>
-
-          <h3><span class="method-icon">💡</span>Finding 2: Latent-Based Visual Space Aligns Better with Robotic Action Space</h3>
-          <p>
-            Among general encoders, latent-based models (V-JEPA 2, DINOv3) significantly outperform pixel-based models (Wan2.2, FLUX.2-dev) on regression tasks. This supports the hypothesis that <strong>actions can be more effectively decoded from latent feature space than from pixel space</strong>, suggesting a more agile path to general robotic control.
-          </p>
-
-          <h3><span class="method-icon">💡</span>Finding 3: Diverse Pre-training Data Unlocks LAM Generalization</h3>
-          <p>
-            Applying the LAPA self-supervised paradigm on top of general vision backbones yields General LAMs that consistently outperform Embodied LAMs. Notably, LAPA-DINOv2 achieves 49.36% Acc versus UniVLA's 17.99%, despite sharing the same backbone. The key differentiator is <strong>broader, more diverse training data with fewer task-specific constraints</strong>, not architectural novelty.
-          </p>
-
-          <h3><span class="method-icon">💡</span>Finding 4: Effective LAM Design Requires Robust Priors and Stable Quantization</h3>
-          <p>
-            Ablation studies reveal two critical design factors for effective latent action models:
-          </p>
-          <ul>
-            <li><strong>Self-supervised contrastive priors</strong> (e.g., DINOv3) consistently outperform reconstruction-based and vision-language contrastive encoders for capturing fine-grained spatial-temporal correspondences.</li>
-            <li><strong>Quantization bottleneck stability</strong> is essential — a moderate codebook size (64), sufficient sequence length (49), and latent dimension (256) achieve the best capacity-stability balance. Short sequences cause codebook collapse (1.6% utilization), while oversized codebooks yield diminishing returns.</li>
-          </ul>
-
-        </div>
-      </div>
+    <div class="stat">
+      <div class="stat-value">11</div>
+      <div class="stat-label">Embodiments</div>
     </div>
-  </section>
-
-  <!-- Method Section -->
-  <section class="section">
-    <div class="container">
-      <h2 class="section-title">Benchmark</h2>
-      <div class="content" style="max-width: 900px; margin: 0 auto;">
-
-        <h3><span class="method-icon">📌</span>Overview</h3>
-        <p>
-          Given a sequence of visual observations \( o_{1:T} \), a Latent Action Model (LAM) extracts motion information as latents \( z \in \mathcal{Z} \). LARY evaluates the efficacy of \( \mathcal{Z} \) through two complementary tasks:
-        </p>
-        <p style="text-align: center; font-size: 1.05rem; margin: 1.2rem 0;">
-          \( f_{\text{sem}} : \mathcal{Z} \rightarrow \mathcal{C} \) &nbsp;&nbsp; (Semantic Action Classification) &nbsp;&nbsp;&nbsp;
-          \( f_{\text{dyn}} : \mathcal{Z} \rightarrow \mathcal{A} \) &nbsp;&nbsp; (Physical Action Regression)
-        </p>
-        <p>
-          The dataset covers <strong>151 action categories</strong>, over <strong>1.2M video clips</strong> (&gt;1,000 hours), <strong>620K image pairs</strong>, and <strong>595K motion trajectories</strong>, spanning 11 robotic embodiments and diverse real-world environments.
-        </p>
-
-
-        <div class="overview-img-wrapper" style="margin-top: 2rem;">
-          <img src="imgs/framework.jpg" alt="Method overview figure" style="max-width: 80%;">
-        </div>
-
-        <hr style="margin: 3rem 0;">
-
-        <h3><span class="method-icon">📊</span>Dataset Statistics</h3>
-        <p>
-          LARY is curated from a diverse collection of human and robot manipulation datasets, covering egocentric and exocentric perspectives across simulated and real-world environments.
-          The dataset spans <strong>11 robotic embodiments</strong> and includes both atomic kinematic primitives and complex composite behaviors.
-        </p>
-
-        <!-- 图片1：饼状图 + 时间分布直方图 -->
-        <div class="overview-img-wrapper" style="margin-top: 1.5rem;">
-          <img src="imgs/dataset_stats.jpg" alt="Dataset composition and video duration distribution" style="max-width: 90%;">
-          <p style="text-align:center; color:#888; font-size:0.9rem; margin-top:0.5rem;">
-            Left: Dataset composition. Right: Video duration distribution across all clips.
-          </p>
-        </div>
-
-        <hr style="margin: 3rem 0;">
-
-        <h3><span class="method-icon">🏷️</span>Action Taxonomy</h3>
-        <p>
-          The benchmark defines a unified taxonomy of <strong>151 action categories</strong> — 28 atomic kinematic primitives and 123 composite behaviors — covering a wide spectrum from frequent everyday actions (e.g., "pick", "place") to long-tail operations (e.g., "shovel", "float").
-        </p>
-
-        <!-- 图片2：类别分布直方图 -->
-        <div class="overview-img-wrapper" style="margin-top: 1.5rem;">
-          <img src="imgs/action_distribution.jpg" alt="Action category distribution" style="max-width: 100%; width: 100%;">
-          <p style="text-align:center; color:#888; font-size:0.9rem; margin-top:0.5rem;">
-            Action category distribution across the dataset.
-          </p>
-        </div>
-
-        <!-- 图片3 + 图片4：word cloud 并排 -->
-        <div style="display:flex; gap:2rem; margin-top:1.5rem; flex-wrap:wrap; justify-content:center;">
-          <div style="flex:1; min-width:280px; text-align:center;">
-            <div class="overview-img-wrapper" style="margin-top:0;">
-              <img src="imgs/action_wordcloud.jpg" alt="Action word cloud" style="max-width:100%;">
-            </div>
-            <p style="color:#888; font-size:0.9rem; margin-top:0.5rem;">Word cloud of action categories.</p>
-          </div>
-          <div style="flex:1; min-width:280px; text-align:center;">
-            <div class="overview-img-wrapper" style="margin-top:0;">
-              <img src="imgs/object_wordcloud.jpg" alt="Object word cloud" style="max-width:100%;">
-            </div>
-            <p style="color:#888; font-size:0.9rem; margin-top:0.5rem;">Word cloud of manipulated objects.</p>
-          </div>
-        </div>
-
-        <hr style="margin: 3rem 0;">
-
-        <h3><span class="method-icon">🖼️</span>Dataset Examples</h3>
-        <p>
-          The three classification sub-tasks cover different granularities and embodiments.
-          <strong>Atomic Robot</strong> captures fine-grained kinematic primitives from exo-centric robot demonstrations.
-          <strong>Composite Human</strong> covers complex multi-step behaviors from egocentric human videos.
-          <strong>Composite Robot</strong> covers task-level robot manipulation across diverse platforms.
-        </p>
-
-        <!-- 图片5、6、7：三列并排 -->
-        <div style="display:flex; gap:1.5rem; margin-top:1.5rem; flex-wrap:wrap; justify-content:center;">
-          <div style="flex:1; min-width:240px; text-align:center;">
-            <div class="overview-img-wrapper" style="margin-top:0;">
-              <img src="imgs/atomic_robot_examples.jpg" alt="Atomic Robot examples" style="max-width:100%;">
-            </div>
-            <p style="color:#888; font-size:0.9rem; margin-top:0.5rem;"><strong>Atomic Robot</strong> — 28 kinematic primitives, 25,940 image pairs from LIBERO.</p>
-          </div>
-          <div style="flex:1; min-width:240px; text-align:center;">
-            <div class="overview-img-wrapper" style="margin-top:0;">
-              <img src="imgs/composite_human_examples.jpg" alt="Composite Human examples" style="max-width:100%;">
-            </div>
-            <p style="color:#888; font-size:0.9rem; margin-top:0.5rem;"><strong>Composite Human</strong> — 123 classes, 692K clips from egocentric human datasets.</p>
-          </div>
-          <div style="flex:1; min-width:240px; text-align:center;">
-            <div class="overview-img-wrapper" style="margin-top:0;">
-              <img src="imgs/composite_robot_examples.jpg" alt="Composite Robot examples" style="max-width:100%;">
-            </div>
-            <p style="color:#888; font-size:0.9rem; margin-top:0.5rem;"><strong>Composite Robot</strong> — 54 classes, 538K clips across 11 robotic embodiments.</p>
-          </div>
-        </div>
-
-      </div>
-    </div>
-  </section>
-
-  <!-- BibTeX Section -->
-  <section class="section">
-    <div class="container">
-      <h2 class="section-title">Citation</h2>
-      <div class="bibtex-box">
-        <pre><code>@article{lary2024,
-  title={LARY: A Latent Action Representation Yielding Benchmark},
-  author={Author One and Author Two and Author Three and Author Four},
-  journal={arXiv preprint arXiv:2024.xxxxx},
-  year={2024}
-}</code></pre>
-      </div>
-    </div>
-  </section>
-
-
-
-  <!-- Lightbox -->
-  <div id="lightbox" onclick="closeLightbox()">
-    <span id="lightbox-close" onclick="closeLightbox()">&#x2715;</span>
-    <img id="lightbox-img" src="" alt="" onclick="event.stopPropagation()">
   </div>
 
-  <script>
-    // Lightbox
-    document.querySelectorAll('.overview-img-wrapper img').forEach(img => {
-      img.style.cursor = 'zoom-in';
-      img.addEventListener('click', () => {
-        document.getElementById('lightbox-img').src = img.src;
-        document.getElementById('lightbox').classList.add('active');
-      });
-    });
+  <p style="margin-top: 3rem; color: var(--text-dim); font-size: 0.85rem;">
+    Dujun Nie*, Fengjiao Chen*†, Jun Kuang, Qi Lv, Xiaoyu Li, Xuezhi Cao‡
+    <br><span style="color: var(--accent);">Meituan</span>
+    &nbsp;&nbsp;*Equal contribution &nbsp;†Project leader &nbsp;‡Corresponding author
+  </p>
+</div>
 
-    function closeLightbox() {
-      document.getElementById('lightbox').classList.remove('active');
+<!-- ABSTRACT -->
+<section id="abstract">
+  <div class="section-label">// Abstract</div>
+  <div class="abstract-card">
+    <p>
+      Scarcity of action data severely limits the generalization of Vision-Language-Action (VLA) models. While Latent Action Models (LAMs) address this by extracting representations from large-scale videos, their capacity for fine-grained proprioceptive control and robust generalization remains largely unquantified.
+      To bridge this gap, we introduce the <strong>Latent Action Representation Yielding (LARY) Benchmark</strong>, a unified framework for evaluating latent action models on both low-level robotic actions and high-level semantic actions. The comprehensively curated dataset encompasses over one million short videos (totaling >1,000 hours) spanning 151 kinds of actions, alongside 620K image pairs and 595K motion trajectories, covering diverse embodiments and environments.
+      Our experiment reveals two key insights: (i) <strong>General visual foundation models consistently outperform specialized embodied LAMs.</strong> (ii) <strong>Latent-based visual space is better aligned to robotic action space than pixel-based space.</strong> These demonstrate that robust latent actions naturally emerge from large-scale visual pre-training, and aligning control policies with the general visual features may be a promising way to VLA generalization.
+    </p>
+    <div class="overview-img">
+      <img src="https://ha8siouhdi.github.io/larybench_web/imgs/lary.jpg" alt="LARY overview">
+    </div>
+  </div>
+</section>
+
+<!-- LEADERBOARD -->
+<section id="leaderboard">
+  <div class="section-label">// Leaderboard</div>
+  <div class="section-title">Model Rankings</div>
+  <div class="section-desc">Comprehensive evaluation across classification accuracy and regression MSE.</div>
+
+  <div class="leaderboard-tabs">
+    <button class="tab active" onclick="switchTab('cls', this)">Classification Acc ↑</button>
+    <button class="tab" onclick="switchTab('reg', this)">Regression MSE ↓</button>
+  </div>
+
+  <div class="table-wrap" id="tab-cls">
+    <table>
+      <thead>
+        <tr>
+          <th>Rank</th><th>Model</th><th>Paradigm</th><th>Params</th><th>Avg. Acc ↑</th><th>Atomic Robot</th><th>Comp. Human</th><th>Comp. Robot</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="rank-1"><td><span class="rank-medal">🥇</span></td><td class="model-name">V-JEPA2</td><td><span class="paradigm-tag semantic">Semantic</span></td><td>303.89</td><td class="best-val">76.62</td><td>79.09</td><td>80.35</td><td>70.43</td></tr>
+        <tr><td><span class="rank-medal">🥈</span></td><td class="model-name">DINOv3</td><td><span class="paradigm-tag semantic">Semantic</span></td><td>303.13</td><td>68.68</td><td>60.79</td><td>76.19</td><td>69.06</td></tr>
+        <tr><td><span class="rank-medal">🥉</span></td><td class="model-name">LAPA-DINOv3</td><td><span class="paradigm-tag general">General LAM</span></td><td>472.45</td><td>49.17</td><td>56.27</td><td>64.19</td><td>27.04</td></tr>
+        <tr><td>4</td><td class="model-name">LAPA-DINOv2</td><td><span class="paradigm-tag general">General LAM</span></td><td>473.69</td><td>49.36</td><td>58.04</td><td>55.86</td><td>34.19</td></tr>
+        <tr><td>5</td><td class="model-name">Wan2.2</td><td><span class="paradigm-tag pixel">Pixel</span></td><td>704.69</td><td>49.36</td><td>14.91</td><td>67.77</td><td>65.39</td></tr>
+        <tr><td>6</td><td class="model-name">LAPA-SigLIP2</td><td><span class="paradigm-tag general">General LAM</span></td><td>200.83</td><td>43.67</td><td>46.83</td><td>54.74</td><td>29.44</td></tr>
+        <tr><td>7</td><td class="model-name">LAPA-MAGVIT2</td><td><span class="paradigm-tag general">General LAM</span></td><td>116.40</td><td>40.78</td><td>33.12</td><td>59.70</td><td>29.53</td></tr>
+        <tr><td>8</td><td class="model-name">FLUX.2-dev</td><td><span class="paradigm-tag pixel">Pixel</span></td><td>84.05</td><td>47.48</td><td>51.95</td><td>46.12</td><td>44.36</td></tr>
+        <tr><td>9</td><td class="model-name">villa-X</td><td><span class="paradigm-tag embodied">Embodied LAM</span></td><td>238.71</td><td>20.90</td><td>15.00</td><td>17.80</td><td>29.90</td></tr>
+        <tr><td>10</td><td class="model-name">LAPA</td><td><span class="paradigm-tag embodied">Embodied LAM</span></td><td>343.80</td><td>20.17</td><td>22.27</td><td>14.61</td><td>23.64</td></tr>
+        <tr><td>11</td><td class="model-name">UniVLA</td><td><span class="paradigm-tag embodied">Embodied LAM</span></td><td>287.75</td><td>17.99</td><td>18.62</td><td>19.08</td><td>18.56</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="table-wrap hidden" id="tab-reg">
+    <table>
+      <thead>
+        <tr>
+          <th>Rank</th><th>Model</th><th>Paradigm</th><th>Params</th><th>Avg. MSE ↓</th><th>CALVIN</th><th>VLABench</th><th>RoboCOIN</th><th>AgiBotWorld</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="rank-1"><td><span class="rank-medal">🥇</span></td><td class="model-name">DINOv3</td><td><span class="paradigm-tag semantic">Semantic</span></td><td>303.13</td><td class="best-val">0.19</td><td>0.22</td><td>0.06</td><td>0.22</td><td>0.24</td></tr>
+        <tr><td><span class="rank-medal">🥈</span></td><td class="model-name">V-JEPA2</td><td><span class="paradigm-tag semantic">Semantic</span></td><td>303.89</td><td>0.25</td><td>0.27</td><td>0.07</td><td>0.32</td><td>0.33</td></tr>
+        <tr><td><span class="rank-medal">🥉</span></td><td class="model-name">Wan2.2</td><td><span class="paradigm-tag pixel">Pixel</span></td><td>704.69</td><td>0.30</td><td>0.39</td><td>0.09</td><td>0.34</td><td>0.39</td></tr>
+        <tr><td>4</td><td class="model-name">FLUX.2-dev</td><td><span class="paradigm-tag pixel">Pixel</span></td><td>84.05</td><td>0.35</td><td>0.25</td><td>0.04</td><td>0.47</td><td>0.62</td></tr>
+        <tr><td>5</td><td class="model-name">LAPA-DINOv3</td><td><span class="paradigm-tag general">General LAM</span></td><td>472.45</td><td>0.60</td><td>0.50</td><td>0.25</td><td>0.82</td><td>0.84</td></tr>
+        <tr><td>6</td><td class="model-name">LAPA-DINOv2</td><td><span class="paradigm-tag general">General LAM</span></td><td>473.69</td><td>0.63</td><td>0.55</td><td>0.26</td><td>0.85</td><td>0.86</td></tr>
+        <tr><td>7</td><td class="model-name">LAPA-MAGVIT2</td><td><span class="paradigm-tag general">General LAM</span></td><td>116.40</td><td>0.65</td><td>0.59</td><td>0.36</td><td>0.80</td><td>0.83</td></tr>
+        <tr><td>8</td><td class="model-name">LAPA-SigLIP2</td><td><span class="paradigm-tag general">General LAM</span></td><td>200.83</td><td>0.65</td><td>0.57</td><td>0.30</td><td>0.86</td><td>0.88</td></tr>
+        <tr><td>9</td><td class="model-name">villa-X</td><td><span class="paradigm-tag embodied">Embodied</span></td><td>238.71</td><td>0.87</td><td>0.86</td><td>0.72</td><td>0.94</td><td>0.97</td></tr>
+        <tr><td>10</td><td class="model-name">UniVLA</td><td><span class="paradigm-tag embodied">Embodied</span></td><td>287.75</td><td>0.87</td><td>0.82</td><td>0.74</td><td>0.94</td><td>0.97</td></tr>
+        <tr><td>11</td><td class="model-name">LAPA</td><td><span class="paradigm-tag embodied">Embodied</span></td><td>343.80</td><td>0.97</td><td>0.96</td><td>0.95</td><td>0.96</td><td>1.00</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- KEY FINDINGS -->
+<section id="findings">
+  <div class="section-label">// Key Findings</div>
+  <div class="section-title">What We Discovered</div>
+  <div class="section-desc">Four key insights from our comprehensive evaluation.</div>
+
+  <div class="findings-grid">
+    <div class="finding-card">
+      <div class="num">Finding 01</div>
+      <h3>Robust Latent Actions Emerge from Large-Scale Visual Pre-training</h3>
+      <p>
+        General vision foundation models dramatically surpass specialized Embodied LAMs. V-JEPA 2 achieves <span class="highlight">76.62% Acc</span> and DINOv3 reaches <span class="highlight">0.19 MSE</span>, while Embodied LAMs remain at 18–21% Acc and 0.87–0.97 MSE. Large-scale self-supervised visual pre-training, even without explicit motion supervision, already encodes rich action-relevant structure.
+      </p>
+    </div>
+    <div class="finding-card">
+      <div class="num">Finding 02</div>
+      <h3>Latent Feature Space Aligns Better with Robotic Actions than Pixel Space</h3>
+      <p>
+        Within general encoders, latent-based models (V-JEPA 2, DINOv3) significantly outperform pixel-based models (Wan2.2, FLUX.2-dev) on regression tasks, despite comparable classification performance. <span class="highlight">Decoding actions from learned latent representations</span> offers a more effective pathway to general robotic control.
+      </p>
+    </div>
+    <div class="finding-card">
+      <div class="num">Finding 03</div>
+      <h3>Diverse Pre-training Data Unlocks LAM Generalization</h3>
+      <p>
+        General LAMs, applying LAPA's self-supervised paradigm on general vision backbones, consistently outperform Embodied LAMs. LAPA-DINOv2 achieves <span class="highlight">49.36% Acc vs. UniVLA's 17.99%</span>, despite sharing the same backbone — the key differentiator is broader, more diverse training data, not architectural novelty.
+      </p>
+    </div>
+    <div class="finding-card">
+      <div class="num">Finding 04</div>
+      <h3>Effective LAMs Require Robust Priors and Stable Quantization</h3>
+      <p>
+        Ablation studies reveal two critical design axes: <span class="highlight">self-supervised contrastive priors</span> (e.g., DINOv3) consistently outperform reconstruction-based encoders for spatial-temporal correspondence, and <span class="highlight">quantization bottleneck stability</span> — moderate codebook size (64), sequence length (49), latent dim (256) — achieves optimal capacity-stability balance.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- DATASET -->
+<section id="dataset">
+  <div class="section-label">// Dataset</div>
+  <div class="section-title">Benchmark Overview</div>
+  <div class="section-desc">Covering atomic kinematic primitives and complex composite behaviors across diverse embodiments.</div>
+
+  <div class="overview-img" style="margin-bottom: 2rem;">
+    <img src="https://ha8siouhdi.github.io/larybench_web/imgs/framework.jpg" alt="Framework">
+  </div>
+
+  <div class="overview-img" style="margin-bottom: 2rem;">
+    <img src="https://ha8siouhdi.github.io/larybench_web/imgs/dataset_stats.jpg" alt="Dataset stats">
+  </div>
+
+  <div class="dataset-grid">
+    <div class="dataset-card">
+      <img src="https://ha8siouhdi.github.io/larybench_web/imgs/atomic_robot_examples.jpg" alt="Atomic Robot">
+      <div class="card-body">
+        <h4>Atomic Robot</h4>
+        <p>28 kinematic primitives, 25,940 image pairs from LIBERO.</p>
+      </div>
+    </div>
+    <div class="dataset-card">
+      <img src="https://ha8siouhdi.github.io/larybench_web/imgs/composite_human_examples.jpg" alt="Composite Human">
+      <div class="card-body">
+        <h4>Composite Human</h4>
+        <p>123 classes, 692K clips from egocentric human datasets.</p>
+      </div>
+    </div>
+    <div class="dataset-card">
+      <img src="https://ha8siouhdi.github.io/larybench_web/imgs/composite_robot_examples.jpg" alt="Composite Robot">
+      <div class="card-body">
+        <h4>Composite Robot</h4>
+        <p>54 classes, 538K clips across 11 robotic embodiments.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CITATION -->
+<section id="citation">
+  <div class="section-label">// Citation</div>
+  <div class="section-title">Cite Our Work</div>
+  <div class="citation-block">
+    <button class="copy-btn" onclick="copyBib()">Copy</button>
+    <pre>@article{lary2024,
+  title={LARY: A Latent Action Representation Yielding Benchmark},
+  author={Nie, Dujun and Chen, Fengjiao and Kuang, Jun and Lv, Qi and Li, Xiaoyu and Cao, Xuezhi},
+  journal={arXiv preprint arXiv:2024.xxxxx},
+  year={2024}
+}</pre>
+  </div>
+</section>
+
+<footer>
+  LARY Benchmark &copy; 2024 Meituan &nbsp;·&nbsp; Built with care.
+</footer>
+
+<script>
+function switchTab(tab, el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('tab-cls').classList.toggle('hidden', tab !== 'cls');
+  document.getElementById('tab-reg').classList.toggle('hidden', tab !== 'reg');
+}
+
+function copyBib() {
+  const bib = document.querySelector('.citation-block pre').textContent;
+  navigator.clipboard.writeText(bib);
+  const btn = document.querySelector('.copy-btn');
+  btn.textContent = 'Copied!';
+  setTimeout(() => btn.textContent = 'Copy', 1500);
+}
+
+// Scroll-triggered fade-in
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      e.target.style.opacity = '1';
+      e.target.style.transform = 'translateY(0)';
     }
+  });
+}, { threshold: 0.1 });
 
-    document.addEventListener('keydown', e => {
-      if (e.key === 'Escape') closeLightbox();
-    });
-  </script>
-
+document.querySelectorAll('section').forEach(s => {
+  s.style.opacity = '0';
+  s.style.transform = 'translateY(30px)';
+  s.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+  observer.observe(s);
+});
+</script>
 </body>
 </html>
