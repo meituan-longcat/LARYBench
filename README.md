@@ -1,5 +1,17 @@
 # LARY — Latent Action Representation Benchmark
 
+<p align="center">
+  <a href="https://ha8siouhdi.github.io/larybench_web/">
+    <img src="https://img.shields.io/badge/Project-Page-blue?style=flat-square&logo=github" alt="Project Page">
+  </a>
+  <a href="https://arxiv.org/abs/your-arxiv-id">
+    <img src="https://img.shields.io/badge/arXiv-Paper-red?style=flat-square&logo=arxiv" alt="arXiv">
+  </a>
+  <a href="https://huggingface.co/your-hf-repo">
+    <img src="https://img.shields.io/badge/🤗-HuggingFace-yellow?style=flat-square" alt="HuggingFace">
+  </a>
+</p>
+
 **LARY** is a unified evaluation framework for **Latent Action Models (LAMs)**.
 Given any LAM (or visual encoder), LARY provides three complementary evaluation pipelines:
 
