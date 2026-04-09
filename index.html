@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LARY Benchmark - Multimodal Understanding Evaluation</title>
+
+  <!-- Bulma CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- MathJax for LaTeX rendering -->
+  <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    .hero-title {
+      font-size: 3rem;
+      font-weight: 700;
+      line-height: 1.2;
+      margin-bottom: 1.5rem;
+      color: white;
+    }
+
+    .author-block {
+      font-size: 1.1rem;
+      margin-bottom: 0.5rem;
+      color: white;
+    }
+
+    .author-block sup {
+      color: rgba(255,255,255,0.85);
+    }
+
+    .button-row {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-top: 2rem;
+    }
+
+    .custom-button {
+      color: white !important;
+      border-radius: 25px;
+      padding: 0.75rem 1.5rem;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: filter 0.2s;
+      font-weight: 500;
+    }
+
+    .custom-button:hover {
+      color: white !important;
+      filter: brightness(1.15);
+    }
+
+    .btn-paper      { background-color: #111111; }
+    .btn-arxiv      { background-color: #111111; }
+    .btn-code       { background-color: #111111; }
+    .btn-dataset    { background-color: #111111; }
+    .btn-leaderboard{ background-color: #111111; }
+
+    .section-title {
+      font-size: 2rem;
+      font-weight: 600;
+      margin-bottom: 1.5rem;
+      text-align: center;
+    }
+
+    .abstract-text {
+      font-size: 1.1rem;
+      line-height: 1.8;
+      max-width: 900px;
+      margin: 0 auto 1.5rem;
+      text-align: justify;
+    }
+
+    .sample-card {
+      background: white;
+      border: 1px solid #dbdbdb;
+      border-radius: 8px;
+      padding: 2rem;
+      margin-bottom: 2rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .media-container {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+    }
+
+    .media-container video,
+    .media-container audio {
+      flex: 1;
+      min-width: 250px;
+      max-width: 100%;
+    }
+
+    .question-text {
+      font-size: 1.2rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      color: #363636;
+    }
+
+    .options-list {
+      list-style: none;
+      padding: 0;
+      margin-bottom: 1rem;
+    }
+
+    .options-list li {
+      padding: 0.5rem 0;
+      font-size: 1.05rem;
+    }
+
+    .answer-highlight {
+      background-color: #48c774;
+      color: white;
+      padding: 0.5rem 1rem;
+      border-radius: 5px;
+      display: inline-block;
+      font-weight: 600;
+    }
+
+    .bibtex-box {
+      background-color: #f5f5f5;
+      border: 1px solid #dbdbdb;
+      border-radius: 5px;
+      padding: 1.5rem;
+      overflow-x: auto;
+    }
+
+    .bibtex-box code {
+      font-family: 'Courier New', monospace;
+      font-size: 0.9rem;
+    }
+
+    .method-icon {
+      font-size: 1.5rem;
+      margin-right: 0.5rem;
+    }
+
+    .leaderboard-table {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    .rank-1 {
+      background-color: #fffacd !important;
+      font-weight: 600;
+    }
+
+    .overview-img-wrapper {
+      text-align: center;
+      margin-top: 2rem;
+      overflow: hidden;
+    }
+
+    .overview-img-wrapper img {
+      max-width: 50%;
+      border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+      transition: transform 0.3s ease;
+      cursor: zoom-in;
+    }
+
+    .overview-img-wrapper img:hover {
+      transform: scale(1.04);
+    }
+
+    /* Lightbox */
+    #lightbox {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.85);
+      z-index: 9999;
+      justify-content: center;
+      align-items: center;
+      cursor: zoom-out;
+    }
+
+    #lightbox.active {
+      display: flex;
+    }
+
+    #lightbox img {
+      max-width: 90vw;
+      max-height: 90vh;
+      border-radius: 6px;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+      cursor: default;
+    }
+
+    #lightbox-close {
+      position: fixed;
+      top: 1.2rem;
+      right: 1.5rem;
+      color: white;
+      font-size: 2rem;
+      cursor: pointer;
+      line-height: 1;
+      user-select: none;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header Section -->
+  <section class="hero is-medium" style="background: linear-gradient(to right, #1a6fd4, #f97316);">
+    <div class="hero-body">
+      <div class="container has-text-centered">
+        <h1 class="hero-title">
+          LARY: A Latent Action Representation Yielding Benchmark
+        </h1>
+
+        <div class="author-block">
+          <span>Dujun Nie<sup>*1</sup></span>,
+          <span>Fengjiao Chen<sup>*†1</sup></span>,
+          <span>Jun Kuang<sup>1</sup></span>,
+          <span>Qi Lv<sup>1</sup></span>,
+          <span>Xiaoyu Li<sup>1</sup></span>,
+          <span>Xuezhi Cao<sup>‡1</sup></span>
+        </div>
+
+        <div class="author-block" style="font-size: 1rem; color: white;">
+          <sup>1</sup>Meituan
+        </div>
+
+        <div class="author-block" style="font-size: 0.9rem; color: white; margin-top: 0.5rem;">
+          <sup>*</sup>Equal contribution
+        </div>
+
+        <div class="author-block" style="font-size: 0.9rem; color: white; margin-top: 0.5rem;">
+          <sup>†</sup>Project leader &nbsp;&nbsp; <sup>‡</sup>Corresponding author
+        </div>
+
+        <div class="button-row">
+          <a href="#" class="custom-button btn-paper">
+            <i class="fas fa-file-pdf"></i>
+            Paper
+          </a>
+          <a href="#" class="custom-button btn-arxiv">
+            <i class="fas fa-scroll"></i>
+            arXiv
+          </a>
+          <a href="#" class="custom-button btn-code">
+            <i class="fab fa-github"></i>
+            Code
+          </a>
+          <a href="#" class="custom-button btn-dataset">
+            <i class="fas fa-database"></i>
+            Dataset
+          </a>
+          <a href="#leaderboard" class="custom-button btn-leaderboard">
+            <i class="fas fa-trophy"></i>
+            Leaderboard
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Abstract Section -->
+  <section class="section">
+    <div class="container">
+      <h2 class="section-title">Abstract</h2>
+      <div class="content">
+        <p class="abstract-text">
+          Scarcity of action data severely limits the generalization of Vision-Language-Action (VLA) models. While Latent Action Models (LAMs) address this by extracting representations from large-scale videos, their capacity for fine-grained proprioceptive control and robust generalization remains largely unquantified.
+To bridge this gap, we introduce the <strong>Latent Action Representation Yielding (LARY) Benchmark</strong>, a unified framework for evaluating latent action models on both low-level robotic actions and high-level semantic actions. The comprehensively curated dataset encompasses over one million short videos (totaling &gt;1,000 hours) spanning 151 kinds of actions, alongside 620K image pairs and 595K motion trajectories, covering diverse embodiments and environments.
+Our experiment reveals two key insights: (i) General visual foundation models consistently outperform specialized embodied LAMs. (ii) Latent-based visual space is better aligned to robotic action space than pixel-based space. These demonstrate that robust latent actions naturally emerge from large-scale visual pre-training, and aligning control policies with the general visual features may be a promising way to VLA generalization.
+        </p>
+
+        <div class="overview-img-wrapper">
+          <img src="imgs/lary.jpg" alt="LARY overview figure">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Leaderboard Section -->
+  <section class="section" id="leaderboard">
+    <div class="container">
+      <h2 class="section-title">Leaderboard</h2>
+
+      <!-- Tab buttons -->
+      <div style="display:flex; justify-content:center; gap:1rem; margin-bottom:1.5rem;">
+        <button id="tab-cls" onclick="switchTab('cls')"
+          style="padding:0.5rem 1.5rem; border-radius:20px; border:2px solid #111; background:#111; color:white; font-weight:600; cursor:pointer;">
+          Classification Acc ↑
+        </button>
+        <button id="tab-reg" onclick="switchTab('reg')"
+          style="padding:0.5rem 1.5rem; border-radius:20px; border:2px solid #111; background:white; color:#111; font-weight:600; cursor:pointer;">
+          Regression MSE ↓
+        </button>
+      </div>
+
+      <div class="leaderboard-table">
+
+        <!-- Classification Table -->
+        <div id="table-cls">
+          <table class="table is-striped is-fullwidth is-hoverable">
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Model</th>
+                <th>Paradigm</th>
+                <th>Params (M)</th>
+                <th>Avg. Acc ↑</th>
+                <th>Atomic Robot</th>
+                <th>Composite Human</th>
+                <th>Composite Robot</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="background:#fffacd; font-weight:600;">
+                <td>🥇 1</td><td>V-JEPA2</td><td>Generative Encoder</td><td>303.89</td><td><strong>76.62</strong></td><td>79.09</td><td>80.35</td><td>70.43</td>
+              </tr>
+              <tr style="background:#f5f5f5;">
+                <td>🥈 2</td><td>DINOv3</td><td>Understanding Encoder</td><td>303.13</td><td><u>68.68</u></td><td>60.79</td><td>76.19</td><td>69.06</td>
+              </tr>
+              <tr>
+                <td>🥉 3</td><td>LAPA-DINOv3 </td><td>General LAM</td><td>472.45</td><td>49.17</td><td>56.27</td><td>64.19</td><td>27.04</td>
+              </tr>
+              <tr>
+                <td>4</td><td>LAPA-DINOv2 </td><td>General LAM</td><td>473.69</td><td>49.36</td><td>58.04</td><td>55.86</td><td>34.19</td>
+              </tr>
+              <tr>
+                <td>5</td><td>Wan2.2</td><td>Generative Encoder</td><td>704.69</td><td>49.36</td><td>14.91</td><td>67.77</td><td>65.39</td>
+              </tr>
+              <tr>
+                <td>6</td><td>LAPA-SigLIP2 </td><td>General LAM</td><td>200.83</td><td>43.67</td><td>46.83</td><td>54.74</td><td>29.44</td>
+              </tr>
+              <tr>
+                <td>7</td><td>LAPA-MAGVIT2 </td><td>General LAM</td><td>116.40</td><td>40.78</td><td>33.12</td><td>59.70</td><td>29.53</td>
+              </tr>
+              <tr>
+                <td>8</td><td>FLUX.2-dev</td><td>Generative Encoder</td><td>84.05</td><td>47.48</td><td>51.95</td><td>46.12</td><td>44.36</td>
+              </tr>
+              <tr>
+                <td>9</td><td>villa-X</td><td>Embodied LAM</td><td>238.71</td><td>20.90</td><td>15.00</td><td>17.80</td><td>29.90</td>
+              </tr>
+              <tr>
+                <td>10</td><td>LAPA</td><td>Embodied LAM</td><td>343.80</td><td>20.17</td><td>22.27</td><td>14.61</td><td>23.64</td>
+              </tr>
+              <tr>
+                <td>11</td><td>UniVLA</td><td>Embodied LAM</td><td>287.75</td><td>17.99</td><td>18.62</td><td>19.08</td><td>18.56</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Regression Table -->
+        <div id="table-reg" style="display:none;">
+          <table class="table is-striped is-fullwidth is-hoverable">
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Model</th>
+                <th>Paradigm</th>
+                <th>Params (M)</th>
+                <th>Avg. MSE ↓</th>
+                <th>CALVIN</th>
+                <th>VLABench</th>
+                <th>RoboCOIN</th>
+                <th>AgiBotWorld-Beta</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="background:#fffacd; font-weight:600;">
+                <td>🥇 1</td><td>DINOv3</td><td>Understanding Encoder</td><td>303.13</td><td><strong>0.19</strong></td><td>0.22</td><td>0.06</td><td>0.22</td><td>0.24</td>
+              </tr>
+              <tr style="background:#f5f5f5;">
+                <td>🥈 2</td><td>V-JEPA2</td><td>Generative Encoder</td><td>303.89</td><td><u>0.25</u></td><td>0.27</td><td>0.07</td><td>0.32</td><td>0.33</td>
+              </tr>
+              <tr>
+                <td>🥉 3</td><td>Wan2.2</td><td>Generative Encoder</td><td>704.69</td><td>0.30</td><td>0.39</td><td>0.09</td><td>0.34</td><td>0.39</td>
+              </tr>
+              <tr>
+                <td>4</td><td>FLUX.2-dev</td><td>Generative Encoder</td><td>84.05</td><td>0.35</td><td>0.25</td><td>0.04</td><td>0.47</td><td>0.62</td>
+              </tr>
+              <tr>
+                <td>5</td><td>LAPA-DINOv3 </td><td>General LAM</td><td>472.45</td><td>0.60</td><td>0.50</td><td>0.25</td><td>0.82</td><td>0.84</td>
+              </tr>
+              <tr>
+                <td>6</td><td>LAPA-DINOv2 </td><td>General LAM</td><td>473.69</td><td>0.63</td><td>0.55</td><td>0.26</td><td>0.85</td><td>0.86</td>
+              </tr>
+              <tr>
+                <td>7</td><td>LAPA-MAGVIT2 </td><td>General LAM</td><td>116.40</td><td>0.65</td><td>0.59</td><td>0.36</td><td>0.80</td><td>0.83</td>
+              </tr>
+              <tr>
+                <td>8</td><td>LAPA-SigLIP2 </td><td>General LAM</td><td>200.83</td><td>0.65</td><td>0.57</td><td>0.30</td><td>0.86</td><td>0.88</td>
+              </tr>
+              <tr>
+                <td>9</td><td>villa-X</td><td>Embodied LAM</td><td>238.71</td><td>0.87</td><td>0.86</td><td>0.72</td><td>0.94</td><td>0.97</td>
+              </tr>
+              <tr>
+                <td>10</td><td>UniVLA</td><td>Embodied LAM</td><td>287.75</td><td>0.87</td><td>0.82</td><td>0.74</td><td>0.94</td><td>0.97</td>
+              </tr>
+              <tr>
+                <td>11</td><td>LAPA</td><td>Embodied LAM</td><td>343.80</td><td>0.97</td><td>0.96</td><td>0.95</td><td>0.96</td><td>1.00</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <script>
+    function switchTab(tab) {
+      document.getElementById('table-cls').style.display = tab === 'cls' ? 'block' : 'none';
+      document.getElementById('table-reg').style.display = tab === 'reg' ? 'block' : 'none';
+      document.getElementById('tab-cls').style.background = tab === 'cls' ? '#111' : 'white';
+      document.getElementById('tab-cls').style.color = tab === 'cls' ? 'white' : '#111';
+      document.getElementById('tab-reg').style.background = tab === 'reg' ? '#111' : 'white';
+      document.getElementById('tab-reg').style.color = tab === 'reg' ? 'white' : '#111';
+    }
+  </script>
+
+  <!-- Method Section -->
+  <section class="section">
+    <div class="container">
+      <h2 class="section-title">Benchmark</h2>
+      <div class="content" style="max-width: 900px; margin: 0 auto;">
+
+        <h3><span class="method-icon">📌</span>Overview</h3>
+        <p>
+          Given a sequence of visual observations \( o_{1:T} \), a Latent Action Model (LAM) extracts motion information as latents \( z \in \mathcal{Z} \). LARY evaluates the efficacy of \( \mathcal{Z} \) through two complementary tasks:
+        </p>
+        <p style="text-align: center; font-size: 1.05rem; margin: 1.2rem 0;">
+          \( f_{\text{sem}} : \mathcal{Z} \rightarrow \mathcal{C} \) &nbsp;&nbsp; (Semantic Action Classification) &nbsp;&nbsp;&nbsp;
+          \( f_{\text{dyn}} : \mathcal{Z} \rightarrow \mathcal{A} \) &nbsp;&nbsp; (Physical Action Regression)
+        </p>
+        <p>
+          The dataset covers <strong>151 action categories</strong>, over <strong>1.2M video clips</strong> (&gt;1,000 hours), <strong>620K image pairs</strong>, and <strong>595K motion trajectories</strong>, spanning 11 robotic embodiments and diverse real-world environments.
+        </p>
+
+
+        <div class="overview-img-wrapper" style="margin-top: 2rem;">
+          <img src="imgs/framework.jpg" alt="Method overview figure" style="max-width: 80%;">
+        </div>
+
+        <hr style="margin: 3rem 0;">
+
+        <h3><span class="method-icon">📊</span>Dataset Statistics</h3>
+        <p>
+          LARY is curated from a diverse collection of human and robot manipulation datasets, covering egocentric and exocentric perspectives across simulated and real-world environments.
+          The dataset spans <strong>11 robotic embodiments</strong> and includes both atomic kinematic primitives and complex composite behaviors.
+        </p>
+
+        <!-- 图片1：饼状图 + 时间分布直方图 -->
+        <div class="overview-img-wrapper" style="margin-top: 1.5rem;">
+          <img src="imgs/dataset_stats.jpg" alt="Dataset composition and video duration distribution" style="max-width: 90%;">
+          <p style="text-align:center; color:#888; font-size:0.9rem; margin-top:0.5rem;">
+            Left: Dataset composition. Right: Video duration distribution across all clips.
+          </p>
+        </div>
+
+        <hr style="margin: 3rem 0;">
+
+        <h3><span class="method-icon">🏷️</span>Action Taxonomy</h3>
+        <p>
+          The benchmark defines a unified taxonomy of <strong>151 action categories</strong> — 28 atomic kinematic primitives and 123 composite behaviors — covering a wide spectrum from frequent everyday actions (e.g., "pick", "place") to long-tail operations (e.g., "shovel", "float").
+        </p>
+
+        <!-- 图片2：类别分布直方图 -->
+        <div class="overview-img-wrapper" style="margin-top: 1.5rem;">
+          <img src="imgs/action_distribution.jpg" alt="Action category distribution" style="max-width: 100%; width: 100%;">
+          <p style="text-align:center; color:#888; font-size:0.9rem; margin-top:0.5rem;">
+            Action category distribution across the dataset.
+          </p>
+        </div>
+
+        <!-- 图片3 + 图片4：word cloud 并排 -->
+        <div style="display:flex; gap:2rem; margin-top:1.5rem; flex-wrap:wrap; justify-content:center;">
+          <div style="flex:1; min-width:280px; text-align:center;">
+            <div class="overview-img-wrapper" style="margin-top:0;">
+              <img src="imgs/action_wordcloud.jpg" alt="Action word cloud" style="max-width:100%;">
+            </div>
+            <p style="color:#888; font-size:0.9rem; margin-top:0.5rem;">Word cloud of action categories.</p>
+          </div>
+          <div style="flex:1; min-width:280px; text-align:center;">
+            <div class="overview-img-wrapper" style="margin-top:0;">
+              <img src="imgs/object_wordcloud.jpg" alt="Object word cloud" style="max-width:100%;">
+            </div>
+            <p style="color:#888; font-size:0.9rem; margin-top:0.5rem;">Word cloud of manipulated objects.</p>
+          </div>
+        </div>
+
+        <hr style="margin: 3rem 0;">
+
+        <h3><span class="method-icon">🖼️</span>Dataset Examples</h3>
+        <p>
+          The three classification sub-tasks cover different granularities and embodiments.
+          <strong>Atomic Robot</strong> captures fine-grained kinematic primitives from exo-centric robot demonstrations.
+          <strong>Composite Human</strong> covers complex multi-step behaviors from egocentric human videos.
+          <strong>Composite Robot</strong> covers task-level robot manipulation across diverse platforms.
+        </p>
+
+        <!-- 图片5、6、7：三列并排 -->
+        <div style="display:flex; gap:1.5rem; margin-top:1.5rem; flex-wrap:wrap; justify-content:center;">
+          <div style="flex:1; min-width:240px; text-align:center;">
+            <div class="overview-img-wrapper" style="margin-top:0;">
+              <img src="imgs/atomic_robot_examples.jpg" alt="Atomic Robot examples" style="max-width:100%;">
+            </div>
+            <p style="color:#888; font-size:0.9rem; margin-top:0.5rem;"><strong>Atomic Robot</strong> — 28 kinematic primitives, 25,940 image pairs from LIBERO.</p>
+          </div>
+          <div style="flex:1; min-width:240px; text-align:center;">
+            <div class="overview-img-wrapper" style="margin-top:0;">
+              <img src="imgs/composite_human_examples.jpg" alt="Composite Human examples" style="max-width:100%;">
+            </div>
+            <p style="color:#888; font-size:0.9rem; margin-top:0.5rem;"><strong>Composite Human</strong> — 123 classes, 692K clips from egocentric human datasets.</p>
+          </div>
+          <div style="flex:1; min-width:240px; text-align:center;">
+            <div class="overview-img-wrapper" style="margin-top:0;">
+              <img src="imgs/composite_robot_examples.jpg" alt="Composite Robot examples" style="max-width:100%;">
+            </div>
+            <p style="color:#888; font-size:0.9rem; margin-top:0.5rem;"><strong>Composite Robot</strong> — 54 classes, 538K clips across 11 robotic embodiments.</p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- Key Findings Section -->
+  <section class="section" style="background-color: #fafafa;">
+    <div class="container">
+      <h2 class="section-title">Key Findings</h2>
+      <div class="content" style="max-width: 900px; margin: 0 auto;">
+
+        <h3><span class="method-icon">💡</span>Finding 1: General Vision Encoders Outperform Embodied LAMs</h3>
+        <p>
+          General vision foundation models (V-JEPA 2: 76.62% Acc, DINOv3: 0.19 MSE) substantially outperform specialized Embodied LAMs (LAPA/UniVLA/villa-X: 18–21% Acc, 0.87–0.97 MSE). This demonstrates that <strong>robust latent action representations naturally emerge from large-scale visual self-supervised pre-training</strong>, even without explicit motion supervision.
+        </p>
+
+        <h3><span class="method-icon">💡</span>Finding 2: Latent-Based Visual Space Aligns Better with Robotic Action Space</h3>
+        <p>
+          Among generative encoders, latent-based models (V-JEPA 2, DINOv3) significantly outperform pixel-based models (Wan2.2, FLUX.2-dev) on regression tasks. This supports the hypothesis that <strong>actions can be more effectively decoded from latent feature space than from pixel space</strong>, suggesting a more agile path to general robotic control.
+        </p>
+
+        <h3><span class="method-icon">💡</span>Finding 3: General LAMs Bridge the Gap</h3>
+        <p>
+          Our proposed General LAMs, which apply the LAPA self-supervised training paradigm on top of general vision backbones, consistently outperform Embodied LAMs. LAPA-DINOv2 achieves 49.36% Acc vs. UniVLA's 17.99%, despite sharing the same backbone — demonstrating that <strong>more diverse training data and fewer task-specific constraints are key to generalization</strong>.
+        </p>
+
+        <h3><span class="method-icon">💡</span>Finding 4: Effective LAM Design Requires Robust Priors and Stable Quantization</h3>
+        <p>
+          Ablation studies reveal two critical design factors for effective latent action models:
+        </p>
+        <ul>
+          <li><strong>Self-supervised contrastive priors</strong> (e.g., DINOv3) consistently outperform reconstruction-based and vision-language contrastive encoders for capturing fine-grained spatial-temporal correspondences.</li>
+          <li><strong>Quantization bottleneck stability</strong> is essential — a moderate codebook size (64), sufficient sequence length (49), and latent dimension (256) achieve the best capacity-stability balance. Short sequences cause codebook collapse (1.6% utilization), while oversized codebooks yield diminishing returns.</li>
+        </ul>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- BibTeX Section -->
+  <section class="section">
+    <div class="container">
+      <h2 class="section-title">Citation</h2>
+      <div class="bibtex-box">
+        <pre><code>@article{lary2024,
+  title={LARY: A Latent Action Representation Yielding Benchmark},
+  author={Author One and Author Two and Author Three and Author Four},
+  journal={arXiv preprint arXiv:2024.xxxxx},
+  year={2024}
+}</code></pre>
+      </div>
+    </div>
+  </section>
+
+
+
+  <!-- Lightbox -->
+  <div id="lightbox" onclick="closeLightbox()">
+    <span id="lightbox-close" onclick="closeLightbox()">&#x2715;</span>
+    <img id="lightbox-img" src="" alt="" onclick="event.stopPropagation()">
+  </div>
+
+  <script>
+    // Lightbox
+    document.querySelectorAll('.overview-img-wrapper img').forEach(img => {
+      img.style.cursor = 'zoom-in';
+      img.addEventListener('click', () => {
+        document.getElementById('lightbox-img').src = img.src;
+        document.getElementById('lightbox').classList.add('active');
+      });
+    });
+
+    function closeLightbox() {
+      document.getElementById('lightbox').classList.remove('active');
+    }
+
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') closeLightbox();
+    });
+  </script>
+
+</body>
+</html>
