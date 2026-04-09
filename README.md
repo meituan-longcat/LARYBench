@@ -592,3 +592,19 @@ $MODEL_DIR/                                  ← LAM weight files (env: MODEL_DI
 | `WANDB_API_KEY` | | Weights & Biases API key |
 | `WANDB_PROJECT` | | Default W&B project name (default: `lary`) |
 
+---
+
+## Acknowledgements
+
+We thank the following open-source projects for their contributions:
+
+- [V-JEPA2](https://github.com/facebookresearch/vjepa2)
+- [UniVLA](https://github.com/OpenDriveLab/UniVLA)
+- [Wan2.2](https://github.com/Wan-Video/Wan2.2)
+- [flux2](https://github.com/black-forest-labs/flux2)
+- [villa-x](https://github.com/microsoft/villa-x)
+- [Open-MAGVIT2](https://github.com/tencentarc/seed-voken)
+- [SigLIP2](https://github.com/google-research/big_vision/tree/main)
+- [DINOv2](https://github.com/facebookresearch/dinov2)
+- [DINOv3](https://github.com/facebookresearch/dinov3)
+
