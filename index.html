@@ -318,11 +318,11 @@ Our experiment reveals two key insights: (i) General visual foundation models co
                 <th>Rank</th>
                 <th>Model</th>
                 <th>Paradigm</th>
-                <th>Params (M)</th>
-                <th>Avg. Acc ↑</th>
-                <th>Atomic Robot</th>
-                <th>Composite Human</th>
-                <th>Composite Robot</th>
+                <th style="white-space:nowrap;">Params (M)</th>
+                <th style="white-space:nowrap;">Avg. Acc ↑</th>
+                <th style="white-space:nowrap;">Atomic Robot</th>
+                <th style="white-space:nowrap;">Composite Human</th>
+                <th style="white-space:nowrap;">Composite Robot</th>
               </tr>
             </thead>
             <tbody>
@@ -371,12 +371,12 @@ Our experiment reveals two key insights: (i) General visual foundation models co
                 <th>Rank</th>
                 <th>Model</th>
                 <th>Paradigm</th>
-                <th>Params (M)</th>
-                <th>Avg. MSE ↓</th>
-                <th>CALVIN</th>
-                <th>VLABench</th>
-                <th>RoboCOIN</th>
-                <th>AgiBotWorld-Beta</th>
+                <th style="white-space:nowrap;">Params (M)</th>
+                <th style="white-space:nowrap;">Avg. MSE ↓</th>
+                <th style="white-space:nowrap;">CALVIN</th>
+                <th style="white-space:nowrap;">VLABench</th>
+                <th style="white-space:nowrap;">RoboCOIN</th>
+                <th style="white-space:nowrap;">AgiBotWorld-Beta</th>
               </tr>
             </thead>
             <tbody>
@@ -431,6 +431,42 @@ Our experiment reveals two key insights: (i) General visual foundation models co
       document.getElementById('tab-reg').style.color = tab === 'reg' ? 'white' : '#111';
     }
   </script>
+
+  <!-- Key Findings Section -->
+  <section class="section" style="background-color: #fafafa;">
+    <div class="container">
+      <h2 class="section-title">Key Findings</h2>
+      <div style="max-width: 900px; margin: 0 auto; border: 2.5px solid #1a6fd4; border-radius: 12px; padding: 2rem 2.5rem; background: #fff; box-shadow: 0 4px 20px rgba(26,111,212,0.10);">
+        <div class="content">
+
+          <h3><span class="method-icon">💡</span>Finding 1: General Vision Encoders Outperform Embodied LAMs</h3>
+          <p>
+            General vision foundation models (V-JEPA 2: 76.62% Acc, DINOv3: 0.19 MSE) substantially outperform specialized Embodied LAMs (LAPA/UniVLA/villa-X: 18–21% Acc, 0.87–0.97 MSE). This demonstrates that <strong>robust latent action representations naturally emerge from large-scale visual self-supervised pre-training</strong>, even without explicit motion supervision.
+          </p>
+
+          <h3><span class="method-icon">💡</span>Finding 2: Latent-Based Visual Space Aligns Better with Robotic Action Space</h3>
+          <p>
+            Among general encoders, latent-based models (V-JEPA 2, DINOv3) significantly outperform pixel-based models (Wan2.2, FLUX.2-dev) on regression tasks. This supports the hypothesis that <strong>actions can be more effectively decoded from latent feature space than from pixel space</strong>, suggesting a more agile path to general robotic control.
+          </p>
+
+          <h3><span class="method-icon">💡</span>Finding 3: Diverse Pre-training Data Unlocks LAM Generalization</h3>
+          <p>
+            Applying the LAPA self-supervised paradigm on top of general vision backbones yields General LAMs that consistently outperform Embodied LAMs. Notably, LAPA-DINOv2 achieves 49.36% Acc versus UniVLA's 17.99%, despite sharing the same backbone. The key differentiator is <strong>broader, more diverse training data with fewer task-specific constraints</strong>, not architectural novelty.
+          </p>
+
+          <h3><span class="method-icon">💡</span>Finding 4: Effective LAM Design Requires Robust Priors and Stable Quantization</h3>
+          <p>
+            Ablation studies reveal two critical design factors for effective latent action models:
+          </p>
+          <ul>
+            <li><strong>Self-supervised contrastive priors</strong> (e.g., DINOv3) consistently outperform reconstruction-based and vision-language contrastive encoders for capturing fine-grained spatial-temporal correspondences.</li>
+            <li><strong>Quantization bottleneck stability</strong> is essential — a moderate codebook size (64), sufficient sequence length (49), and latent dimension (256) achieve the best capacity-stability balance. Short sequences cause codebook collapse (1.6% utilization), while oversized codebooks yield diminishing returns.</li>
+          </ul>
+
+        </div>
+      </div>
+    </div>
+  </section>
 
   <!-- Method Section -->
   <section class="section">
@@ -533,40 +569,6 @@ Our experiment reveals two key insights: (i) General visual foundation models co
             <p style="color:#888; font-size:0.9rem; margin-top:0.5rem;"><strong>Composite Robot</strong> — 54 classes, 538K clips across 11 robotic embodiments.</p>
           </div>
         </div>
-
-      </div>
-    </div>
-  </section>
-
-  <!-- Key Findings Section -->
-  <section class="section" style="background-color: #fafafa;">
-    <div class="container">
-      <h2 class="section-title">Key Findings</h2>
-      <div class="content" style="max-width: 900px; margin: 0 auto;">
-
-        <h3><span class="method-icon">💡</span>Finding 1: General Vision Encoders Outperform Embodied LAMs</h3>
-        <p>
-          General vision foundation models (V-JEPA 2: 76.62% Acc, DINOv3: 0.19 MSE) substantially outperform specialized Embodied LAMs (LAPA/UniVLA/villa-X: 18–21% Acc, 0.87–0.97 MSE). This demonstrates that <strong>robust latent action representations naturally emerge from large-scale visual self-supervised pre-training</strong>, even without explicit motion supervision.
-        </p>
-
-        <h3><span class="method-icon">💡</span>Finding 2: Latent-Based Visual Space Aligns Better with Robotic Action Space</h3>
-        <p>
-          Among general encoders, latent-based models (V-JEPA 2, DINOv3) significantly outperform pixel-based models (Wan2.2, FLUX.2-dev) on regression tasks. This supports the hypothesis that <strong>actions can be more effectively decoded from latent feature space than from pixel space</strong>, suggesting a more agile path to general robotic control.
-        </p>
-
-        <h3><span class="method-icon">💡</span>Finding 3: General LAMs Bridge the Gap</h3>
-        <p>
-          Our proposed General LAMs, which apply the LAPA self-supervised training paradigm on top of general vision backbones, consistently outperform Embodied LAMs. LAPA-DINOv2 achieves 49.36% Acc vs. UniVLA's 17.99%, despite sharing the same backbone — demonstrating that <strong>more diverse training data and fewer task-specific constraints are key to generalization</strong>.
-        </p>
-
-        <h3><span class="method-icon">💡</span>Finding 4: Effective LAM Design Requires Robust Priors and Stable Quantization</h3>
-        <p>
-          Ablation studies reveal two critical design factors for effective latent action models:
-        </p>
-        <ul>
-          <li><strong>Self-supervised contrastive priors</strong> (e.g., DINOv3) consistently outperform reconstruction-based and vision-language contrastive encoders for capturing fine-grained spatial-temporal correspondences.</li>
-          <li><strong>Quantization bottleneck stability</strong> is essential — a moderate codebook size (64), sufficient sequence length (49), and latent dimension (256) achieve the best capacity-stability balance. Short sequences cause codebook collapse (1.6% utilization), while oversized codebooks yield diminishing returns.</li>
-        </ul>
 
       </div>
     </div>
