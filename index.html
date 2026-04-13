@@ -295,6 +295,23 @@ section {
   width: 100%;
   display: block;
 }
+.img-caption {
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--muted);
+  padding: 0.6rem 1rem 0.8rem;
+  margin: 0;
+  background: var(--card);
+  border-top: 1px solid var(--border);
+}
+
+/* === WORD CLOUD ROW === */
+.wordcloud-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-top: 3rem;
+}
 
 /* === LEADERBOARD === */
 .leaderboard-tabs {
@@ -562,9 +579,9 @@ footer {
   </div>
 
   <p style="margin-top: 3rem; color: var(--text-dim); font-size: 0.85rem;">
-    Dujun Nie*, Fengjiao Chen*†, Jun Kuang, Qi Lv, Xiaoyu Li, Xuezhi Cao‡
+    Dujun Nie*, Fengjiao Chen*†, Qi Lv, Jun Kuang, Xiaoyu Li, Xuezhi Cao, Xunliang Cai
     <br><span style="color: var(--accent);">Meituan</span>
-    &nbsp;&nbsp;*Equal contribution &nbsp;†Project leader &nbsp;‡Corresponding author
+    &nbsp;&nbsp;*Equal contribution &nbsp;†Project leader &nbsp;
   </p>
 </div>
 
@@ -578,7 +595,7 @@ footer {
       Our experiment reveals two key insights: (i) <strong>General visual foundation models consistently outperform specialized embodied LAMs.</strong> (ii) <strong>Latent-based visual space is better aligned to robotic action space than pixel-based space.</strong> These demonstrate that robust latent actions naturally emerge from large-scale visual pre-training, and aligning control policies with the general visual features may be a promising way to VLA generalization.
     </p>
     <div class="overview-img">
-      <img src="https://ha8siouhdi.github.io/larybench_web/imgs/lary.jpg" alt="LARY overview">
+      <img src="imgs/lary.jpg" alt="LARY overview">
     </div>
   </div>
 </section>
@@ -686,30 +703,38 @@ footer {
   <div class="section-desc">Covering atomic kinematic primitives and complex composite behaviors across diverse embodiments.</div>
 
   <div class="overview-img" style="margin-bottom: 2rem;">
-    <img src="https://ha8siouhdi.github.io/larybench_web/imgs/framework.png" alt="Framework">
+    <img src="imgs/action_distribution.jpg" alt="Action Category Distribution">
+    <p class="img-caption">Figure 1. Distribution of action categories across the LARY benchmark, covering atomic kinematic primitives and composite behaviors for both robot and human embodiments.</p>
   </div>
 
-  <div class="overview-img" style="margin-bottom: 2rem;">
-    <img src="https://ha8siouhdi.github.io/larybench_web/imgs/dataset_stats.jpg" alt="Dataset stats">
+  <div class="wordcloud-row" style="margin-bottom: 2rem;">
+    <div class="overview-img">
+      <img src="imgs/action_wordcloud.jpg" alt="Action Word Cloud">
+      <p class="img-caption">Figure 2a. Word cloud of action verbs in the LARY benchmark.</p>
+    </div>
+    <div class="overview-img">
+      <img src="imgs/object_wordcloud.jpg" alt="Object Word Cloud">
+      <p class="img-caption">Figure 2b. Word cloud of object nouns in the LARY benchmark.</p>
+    </div>
   </div>
 
   <div class="dataset-grid">
     <div class="dataset-card">
-      <img src="https://ha8siouhdi.github.io/larybench_web/imgs/atomic_robot_examples.jpg" alt="Atomic Robot">
+      <img src="imgs/atomic_robot_examples.jpg" alt="Atomic Robot">
       <div class="card-body">
         <h4>Atomic Robot</h4>
         <p>28 kinematic primitives, 25,940 image pairs from LIBERO.</p>
       </div>
     </div>
     <div class="dataset-card">
-      <img src="https://ha8siouhdi.github.io/larybench_web/imgs/composite_human_examples.jpg" alt="Composite Human">
+      <img src="imgs/composite_human_examples.jpg" alt="Composite Human">
       <div class="card-body">
         <h4>Composite Human</h4>
         <p>123 classes, 692K clips from egocentric human datasets.</p>
       </div>
     </div>
     <div class="dataset-card">
-      <img src="https://ha8siouhdi.github.io/larybench_web/imgs/composite_robot_examples.jpg" alt="Composite Robot">
+      <img src="imgs/composite_robot_examples.jpg" alt="Composite Robot">
       <div class="card-body">
         <h4>Composite Robot</h4>
         <p>54 classes, 538K clips across 11 robotic embodiments.</p>
