@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <a href="https://ha8siouhdi.github.io/larybench_web/"><img src="https://img.shields.io/badge/Project-Page-blue?style=flat-square&logo=github" alt="Project Page"></a><a href="https://arxiv.org/abs/your-arxiv-id"><img src="https://img.shields.io/badge/arXiv-Paper-red?style=flat-square&logo=arxiv" alt="arXiv"></a><a href="https://huggingface.co/your-hf-repo"><img src="https://img.shields.io/badge/🤗-HuggingFace-yellow?style=flat-square" alt="HuggingFace"></a><a href="LARYBench.pdf"><img src="https://img.shields.io/badge/Paper-PDF-orange?style=flat-square&logo=adobeacrobatreader" alt="PDF"></a>
+  <a href="https://ha8siouhdi.github.io/larybench_web/"><img src="https://img.shields.io/badge/Project-Page-blue?style=flat-square&logo=github" alt="Project Page"></a><a href="https://arxiv.org/abs/your-arxiv-id"><img src="https://img.shields.io/badge/arXiv-Paper-red?style=flat-square&logo=arxiv" alt="arXiv"></a><a href="https://huggingface.co/your-hf-repo"><img src="https://img.shields.io/badge/🤗-HuggingFace-yellow?style=flat-square" alt="HuggingFace"></a><a href="LARYBench.pdf"><img src="https://img.shields.io/badge/Paper-PDF-orange?style=flat-square&logo=adobeacrobatreader" alt="PDF"></a><a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="MIT License"></a>
 </p>
 
 **LARY** is a unified evaluation framework for **latent action representations**.
@@ -16,6 +16,12 @@ Given any model that produces latent action representations (LAMs or visual enco
 | **`get_latent_action`** | Extract latent action representations from videos or image pairs |
 | **`classification`** | Probe how well latent actions capture *action semantics* (action-type recognition) |
 | **`regression`** | Probe how well latent actions can *decode physical robot actions* (action regression) |
+
+---
+
+## News
+
+- **[2026-04-13]** We release the code, text annotations, and partial validation datasets. Training datasets are coming soon.
 
 ---
 
@@ -554,6 +560,26 @@ If you find this work useful, please cite:
   url={https://arxiv.org/abs/2510.18915},
 }
 ```
+
+---
+
+## Data Statements
+
+LARYBench is built upon the following publicly available datasets. We gratefully acknowledge the efforts of their creators and ask users to comply with each dataset's respective license and terms of use.
+
+| Dataset | Link |
+|---|---|
+| EgoDex | [github.com/apple/ml-egodex](https://github.com/apple/ml-egodex) |
+| Something-Something V2 | [paperswithcode.com/dataset/something-something-v2](https://paperswithcode.com/dataset/something-something-v2) |
+| Ego4D | [github.com/facebookresearch/Ego4d](https://github.com/facebookresearch/Ego4d) |
+| HoloAssist | [holoassist.github.io](https://holoassist.github.io/) |
+| EPIC-KITCHENS | [epic-kitchens.github.io](https://epic-kitchens.github.io/) |
+| TACO | [arxiv.org/abs/2401.08399](https://arxiv.org/abs/2401.08399) |
+| AgiBotWorld-Beta | [github.com/OpenDriveLab/AgiBot-World](https://github.com/OpenDriveLab/AgiBot-World) |
+| LIBERO | [github.com/Lifelong-Robot-Learning/LIBERO](https://github.com/Lifelong-Robot-Learning/LIBERO) |
+| RoboCOIN | [github.com/FlagOpen/RoboCOIN](https://github.com/FlagOpen/RoboCOIN) |
+| VLABench | [github.com/OpenMOSS/VLABench](https://github.com/OpenMOSS/VLABench) |
+| CALVIN | [github.com/mees/calvin](https://github.com/mees/calvin) |
 
 ---
 
