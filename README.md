@@ -1,6 +1,10 @@
 # LARY — Latent Action Representation Benchmark
 
 <p align="center">
+  <img src="assets/lary.jpg" alt="LARYBench" width="100%">
+</p>
+
+<p align="center">
   <a href="https://ha8siouhdi.github.io/larybench_web/">
     <img src="https://img.shields.io/badge/Project-Page-blue?style=flat-square&logo=github" alt="Project Page">
   </a>
@@ -9,6 +13,9 @@
   </a>
   <a href="https://huggingface.co/your-hf-repo">
     <img src="https://img.shields.io/badge/🤗-HuggingFace-yellow?style=flat-square" alt="HuggingFace">
+  </a>
+  <a href="LARYBench.pdf">
+    <img src="https://img.shields.io/badge/Paper-PDF-orange?style=flat-square&logo=adobeacrobatreader" alt="PDF">
   </a>
 </p>
 
@@ -26,7 +33,7 @@ Given any LAM (or visual encoder), LARY provides three complementary evaluation 
 ## Table of Contents
 
 1. [Overview](#overview)
-2. [Project Structure](#project-structure)
+2. [Contributions](#contributions)
 3. [Environment Setup](#environment-setup)
 4. [Quick Start — End-to-End Pipeline](#quick-start--end-to-end-pipeline)
 5. [Step 1 · get\_latent\_action](#step-1--get_latent_action)
@@ -46,84 +53,21 @@ Given any LAM (or visual encoder), LARY provides three complementary evaluation 
 
 ## Overview
 
-```
-$LARY_ROOT/data/{dataset}_metadata_{split}.csv   ← pre-built, relative paths
-        │
-        ▼
-┌─────────────────────────────┐
-│  get_latent_action          │  ← any LAM plugged in here
-│  (dynamics.py + extract.py) │
-└────────────┬────────────────┘
-             │  
-             │          
-    ┌────────┴────────┐
-    ▼                 ▼
-┌──────────────┐  ┌──────────────┐
-│ classification│  │  regression  │
-│  (action-type │  │ (robot action│
-│   accuracy)   │  │    MSE)      │
-└──────────────┘  └──────────────┘
-```
+While the shortage of explicit action data limits Vision-Language-Action (VLA) models, human action videos offer a promising data source. A critical challenge in utilizing large-scale human video datasets lies in transforming visual signals into ontology-independent representations, known as latent actions. However, the capacity of latent action representation to derive robust control from visual observations has yet to be rigorously evaluated.
 
----
+To bridge this vision-to-action gap, we introduce the \textbf{Latent Action Representation Yielding (LARY) Benchmark}, a unified framework for evaluating latent action representations on both high-level semantic actions and low-level robotic control. The comprehensively curated dataset encompasses over one million videos (1,000 hours) spanning 151 action categories, alongside 620K image pairs and 595K motion trajectories across diverse embodiments and environments. Our experiments reveal two crucial insights: \textbf{(i) General visual foundation models consistently outperform specialized embodied LAMs. (ii) Latent-based visual space is fundamentally better aligned to physical action space than pixel-based space.} These findings demonstrate that robust physical actions naturally emerge from large-scale visual pre-training, suggesting that aligning control policies directly with general visual representations is the key to generalizable VLA models.
 
-## Project Structure
+<p align="center">
+  <img src="assets/framework.png" alt="LARYBench Overview" width="100%">
+</p>
 
-```
-LARY/
-├── env.sh                         # All environment variables (source this first)
-├── lary/                          # Unified Python package
-│   ├── cli.py                     # Entry point: `python -m lary.cli <command>`
-│   ├── config.py                  # Configuration dataclasses
-│   ├── extract.py                 # LatentActionExtractor (unified extraction API)
-│   └── path_resolver.py           # Path resolution utilities
-│
-├── get_latent_action/             # LAM adapters
-│   ├── dynamics.py                # get_dynamic_tokenizer() — model factory
-│   ├── tokenizer.py               # Low-level encoder helpers (DINOv2/v3, SigLIP2, MAGVIT2)
-│   ├── get_indices.py             # Frame sampling
-│   ├── get_latent_action.py       # Video-based extraction script
-│   ├── get_latent_action_img.py   # Image-pair extraction script
-│   ├── sampler.py                 # MGSampler / UniformSampler
-│   └── models/                   # Vendored model code
-│       ├── laq_model/             # LAQ
-│       ├── univla/                # UniVLA 
-│       ├── villa_x/               # villa-X
-│       ├── vjepa2/                # V-JEPA 2
-│       ├── flux2/                 # FLUX.2 VAE
-│       └── wan2_2/                # Wan 2.2 VAE
-│
-├── classification/                # Action classification probe
-│   ├── evals/
-│   │   ├── main.py                # Entry point (multi-GPU DDP)
-│   │   ├── scaffold.py            # Eval dispatcher
-│   │   └── video_classification_frozen/
-│   │       └── eval.py            # Training & evaluation loop
-│   ├── src/
-│   │   ├── datasets/
-│   │   │   └── video_dataset.py   
-│   │   └── models/
-│   │       └── attentive_pooler.py # FeatureEvaluator classifier
-│   └── configs/eval/vitl/
-│       └── manipulation.yaml      # Default YAML config
-│
-├── regression/                    # Robot action regression probe
-│   ├── main.py                    # Training & evaluation
-│   └── dit.py                     # Diffusion Transformer decoder
-│
-├── data/                          # Pre-built metadata CSVs (relative paths, committed)
-│   ├── human_1st_metadata_{train,val}.csv
-│   ├── robot_1st_metadata_{train,val}.csv
-│   ├── libero_metadata_{train,val}.csv
-│   ├── calvin_metadata_{train,val}.csv
-│   ├── vlabench_metadata_{train,val}.csv
-│   ├── vlabench_15_metadata_{train,val}.csv
-│   ├── vlabench_30_metadata_{train,val}.csv
-│   ├── agibotbeta_metadata_{seen_train,seen_val,unseen}.csv
-│   ├── robocoin_metadata_{seen_train,seen_val,unseen}.csv
-│   └── {split}_la_{dataset}_{stride}_{model}.csv
+## Contributions
 
-```
+- **LARYBench**: A comprehensive benchmark that first decouples the evaluation of latent action representations from downstream policy performance. By probing both semantic understanding and physical control fidelity over 1.2M videos, 620K image pairs, and 595K trajectories across 151 action categories and 11 robotic embodiments, LARYBench enables direct, standardized measurement of representation quality itself.
+
+- **General LAMs**: To probe whether general visual priors can benefit latent action learning, we propose General LAMs, which apply the LAM training pipeline to frozen general vision backbones using only internet videos. This new model family serves as a critical bridge between pure vision encoders and specialized embodied LAMs in our evaluation.
+
+- **Key Findings**: Through systematic evaluation of 11 models, we reveal two consistent trends: (i) action-relevant features can emerge from large-scale visual pre-training without explicit action supervision, and (ii) latent-based feature spaces tend to align with robotic control better than pixel-based ones. These results suggest that future VLA systems may benefit more from leveraging general visual representations than from learning action spaces solely on scarce robotic data.
 
 ---
 
