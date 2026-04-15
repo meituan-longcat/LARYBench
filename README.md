@@ -15,6 +15,8 @@
   &nbsp;
   <a href="LARYBench.pdf"><img src="https://img.shields.io/badge/Paper-PDF-orange?style=flat-square&logo=adobeacrobatreader" alt="PDF"></a>
   &nbsp;
+  <a href="https://discord.gg/EXsG52D8SW"><img src="https://img.shields.io/badge/Discord-Join%20Chat-5865F2?style=flat-square&logo=discord&logoColor=white"></a>
+  &nbsp;
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="MIT License"></a>
 </p>
 
@@ -614,3 +616,8 @@ We thank the following open-source projects for their contributions:
 - [DINOv2](https://github.com/facebookresearch/dinov2)
 - [DINOv3](https://github.com/facebookresearch/dinov3)
 
+## Support
+Please contact us at <a href="mailto:longcat-team@meituan.com">longcat-team@meituan.com</a> or join our WeChat Group if you have any questions.
+
+#### WeChat Group
+<img src="assets/Wechat.png" width = "200" height = "200"  />
