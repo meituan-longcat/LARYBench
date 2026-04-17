@@ -601,6 +601,36 @@ LARYBench is built upon the following publicly available datasets. We gratefully
 | VLABench | [github.com/OpenMOSS/VLABench](https://github.com/OpenMOSS/VLABench) |
 | CALVIN | [github.com/mees/calvin](https://github.com/mees/calvin) |
 
+
+## License
+
+The code and tools in this repository are released under the [MIT License](LICENSE).
+
+However, this dataset is derived from multiple third-party datasets, each governed by its own license. **The overall dataset is subject to the most restrictive terms among all included sources.** Users must comply with the respective licenses for each subset.
+
+### Dataset License Summary
+
+| Dataset | License |
+|---|---|
+| EPIC-KITCHENS | [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) |
+| TACO | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
+| AgiBotWorld-Beta | [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) |
+| Ego4D, HoloAssist, LIBERO, RoboCOIN, VLABench, CALVIN | [MIT](https://opensource.org/licenses/MIT) |
+
+### Important Notices
+
+- **Non-commercial use only**: Subsets derived from EPIC-KITCHENS, and AgiBotWorld-Beta are restricted to **non-commercial research and educational purposes only**, due to the NC (NonCommercial) clauses in their respective licenses.
+
+- **ShareAlike**: The AgiBotWorld-Beta-derived subset is subject to the **SA (ShareAlike)** clause. Any redistribution of this subset must be made available under the same [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) license.
+
+- **Attribution required**: All subsets derived from Creative Commons-licensed sources require proper attribution to the original dataset authors.
+
+### Usage Recommendation
+
+If you intend to use this dataset for **commercial purposes**, please use only the subsets released under MIT or CC BY 4.0 licenses (i.e., TACO and other datasets). The remaining subsets are **strictly non-commercial**.
+
+For any questions regarding licensing, please refer to the original dataset sources or contact the respective dataset authors.
+
 ---
 
 ## Acknowledgements
