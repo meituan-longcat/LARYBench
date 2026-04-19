@@ -45,19 +45,20 @@ Given any model that produces latent action representations (LAMs or visual enco
 1. [Overview](#overview)
 2. [Contributions](#contributions)
 3. [Environment Setup](#environment-setup)
-4. [Quick Start — End-to-End Pipeline](#quick-start--end-to-end-pipeline)
-5. [Step 1 · get\_latent\_action](#step-1--get_latent_action)
+4. [Data Preparation](#data-preparation)
+5. [Quick Start — End-to-End Pipeline](#quick-start--end-to-end-pipeline)
+6. [Step 1 · get\_latent\_action](#step-1--get_latent_action)
    - [Extracting Latent Actions (Video Mode)](#extracting-latent-actions-video-mode)
    - [Extracting Latent Actions (Image-Pair Mode)](#extracting-latent-actions-image-pair-mode)
    - [Supported Models](#supported-models)
    - [Adding a New LAM](#adding-a-new-lam)
-6. [Step 2 · Classification](#step-2--classification)
+7. [Step 2 · Classification](#step-2--classification)
    - [Running Classification](#running-classification)
-7. [Step 3 · Regression](#step-3--regression)
+8. [Step 3 · Regression](#step-3--regression)
    - [Running Regression](#running-regression)
-8. [Supported Datasets](#supported-datasets)
-9. [Data Directory Layout](#data-directory-layout)
-10. [Environment Variables Reference](#environment-variables-reference)
+9. [Supported Datasets](#supported-datasets)
+10. [Data Directory Layout](#data-directory-layout)
+11. [Environment Variables Reference](#environment-variables-reference)
 
 ---
 
@@ -132,6 +133,80 @@ source /path/to/LARY/env.sh
 ```
 
 Key variables and their roles are documented in [Environment Variables Reference](#environment-variables-reference).
+
+---
+
+## Data Preparation
+
+Two datasets — **Something-Something V2 (SSv2)** and **EgoDex** — cannot be redistributed as pre-clipped segments due to their licenses. You need to download the raw videos yourself and run the provided clipping script to reproduce the exact clips used in LARYBench.
+
+### Step 1 — Download the raw videos
+
+| Dataset | Download link |
+|---|---|
+| Something-Something V2 | [qualcomm.com/developer/software/something-something-v-2-dataset](https://www.qualcomm.com/developer/software/something-something-v-2-dataset) |
+| EgoDex | [github.com/apple/ml-egodex](https://github.com/apple/ml-egodex) |
+
+After downloading, your directories should look like:
+
+```
+/path/to/SSV2/
+├── 100020.webm
+├── 100004.webm
+└── ...
+
+/path/to/EgoDex/          # the "unzipped/" folder or its parent
+├── part1/
+│   ├── add_remove_lid/
+│   │   ├── 1068.mp4
+│   │   └── ...
+│   └── ...
+└── ...
+```
+
+### Step 2 — Install dependencies
+
+The script requires `ffmpeg` (system) and `opencv-python` (Python):
+
+```bash
+# ffmpeg
+sudo apt-get install ffmpeg   # or: conda install -c conda-forge ffmpeg
+
+# Python
+pip install opencv-python pandas tqdm
+```
+
+### Step 3 — Run the clipping script
+
+```bash
+python utils/prepare_ssv2_egodex.py \
+    --ssv2-root   /path/to/SSV2   \
+    --egodex-root /path/to/EgoDex \
+    --output-dir  /path/to/DATA_DIR/classification \
+    --workers     16
+```
+
+The script reads `data/seed_ssv2.csv` and `data/seed_egodex.csv` (already committed), parses the LLM-generated time annotations in the `seed_output` column, and clips only the segments that are actually referenced in `human_1st_metadata_train.csv` / `human_1st_metadata_val.csv`. Clips that require reversal (those with a `_rev` suffix in the metadata) are produced automatically.
+
+Output layout:
+
+```
+<output-dir>/
+├── SSv2/                        # flat — no subfolder
+│   ├── 164394_2.mp4             # <seed_row_index>_<line_idx>.mp4
+│   ├── 11526_0_rev.mp4
+│   └── ...
+└── EgoDex/
+    ├── 3279/                    # subfolder = video_basename
+    │   ├── 185338_2.mp4         # <seed_row_index>_<line_idx>.mp4
+    │   └── ...
+    ├── 4744/
+    │   ├── 167319_4_rev.mp4
+    │   └── ...
+    └── ...
+```
+
+The script is **resumable** — already-existing non-empty files are skipped automatically.
 
 ---
 
