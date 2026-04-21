@@ -32,6 +32,7 @@ Given any model that produces latent action representations (LAMs or visual enco
 ---
 
 ## News
+- **[2026-04-21]** We release the general LAMs trained in ablation studies, [LAPA-DINOv3](https://huggingface.co/AGI-Eval/LAPA-DINOv3) and  [LAPA-DINOv2](https://huggingface.co/AGI-Eval/LAPA-DINOv2). Even though these models are still rough experimental prototypes, with clear flaws in both training data and methods, we’re sharing them anyway to help push latent action research forward together. Have fun~
 - **[2026-04-15]** We release partial training datasets due to the license limitation.
 - **[2026-04-13]** We release the code, text annotations, and partial validation datasets. Training datasets are coming soon.
 
