@@ -41,14 +41,10 @@ import pandas as pd
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
 
-# ---------------------------------------------------------------------------
-# Paths (relative to this script — lives in LARYBench/data/)
-# ---------------------------------------------------------------------------
-SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
-SEED_SSV2   = os.path.join(SCRIPT_DIR, "seed_ssv2.csv")
-SEED_EGODEX = os.path.join(SCRIPT_DIR, "seed_egodex.csv")
-META_TRAIN  = os.path.join(SCRIPT_DIR, "human_1st_metadata_train.csv")
-META_VAL    = os.path.join(SCRIPT_DIR, "human_1st_metadata_val.csv")
+SEED_SSV2   = "data/seed_ssv2.csv"
+SEED_EGODEX = "data/seed_egodex.csv"
+META_TRAIN  = "data/human_1st_metadata_train.csv"
+META_VAL    = "data/human_1st_metadata_val.csv"
 
 
 # ---------------------------------------------------------------------------
