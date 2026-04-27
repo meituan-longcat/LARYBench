@@ -32,6 +32,7 @@ Given any model that produces latent action representations (LAMs or visual enco
 ---
 
 ## News
+- **[2026-04-27]** We have open-sourced all datasets.
 - **[2026-04-21]** We release the general LAMs trained in ablation studies, [LAPA-DINOv3](https://huggingface.co/AGI-Eval/LAPA-DINOv3) and  [LAPA-DINOv2](https://huggingface.co/AGI-Eval/LAPA-DINOv2). Even though these models are still rough experimental prototypes, with clear flaws in both training data and methods, we’re sharing them anyway to help push latent action research forward together. Have fun~
 - **[2026-04-15]** We release partial training datasets due to the license limitation.
 - **[2026-04-13]** We release the code, text annotations, and partial validation datasets. Training datasets are coming soon.
@@ -42,7 +43,7 @@ Given any model that produces latent action representations (LAMs or visual enco
 - [x] Text annotations [link](https://github.com/meituan-longcat/LARYBench/tree/main/data)
 - [x] Partial Validation datasets 
 - [x] Partial Training datasets
-- [ ] Full datasets
+- [x] Full datasets
 
 ---
 
@@ -111,7 +112,7 @@ conda create -n laq python=3.10 -y
 conda activate laq
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
 pip install einops transformers omegaconf tqdm pandas numpy opencv-python pillow \
-            scikit-image accelerate diffusers wandb timm decord seaborn scikit-learn
+            scikit-image accelerate diffusers wandb timm decord seaborn scikit-learn prettytable pytorch_lightning lightning beartype piq rotary_embedding_torch
 ```
 
 **V-JEPA 2 environment**:
