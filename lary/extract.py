@@ -488,7 +488,9 @@ def extract_latent_actions(
                 f"Run `python prepare_metadata.py` first, or use --input to specify the file directly."
             )
     if output_dir is None:
-        output_dir = str(config.paths.log_dir / "latent_action")
+        output_dir = os.environ.get("LARY_LA_DIR")
+        if output_dir is None:
+            output_dir = str(config.paths.log_dir / "latent_action")
 
     # Setup GPU
     if gpus:

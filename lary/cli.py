@@ -8,6 +8,7 @@ Usage:
 """
 
 import argparse
+import os
 import sys
 from pathlib import Path
 from typing import Optional, List
@@ -86,6 +87,10 @@ Examples:
                                 help="Stride for frame sampling")
     regress_parser.add_argument("--model-type", type=str, required=True,
                                 help="Model type for regression")
+    regress_parser.add_argument("--action-mode", type=str, default="absolute", choices=["absolute", "relative"],
+                                help="Regression target: full absolute action chunk or relative last-minus-first action.")
+    regress_parser.add_argument("--action-data-root", type=str, default=None,
+                                help="Optional LARYBench data root. Relative mode reads regression_relative/<dataset>/ under this root.")
     regress_parser.add_argument("--batch-size", type=int, default=256)
     regress_parser.add_argument("--epochs", type=int, default=20)
     regress_parser.add_argument("--lr", type=float, default=0.0001)
@@ -191,6 +196,24 @@ _STATS_JSON_NAME = {
     'robocoin':   'robocoin_stats.json',
 }
 
+_REGRESSION_DATA_SUBDIR = {
+    'calvin': 'calvin',
+    'vlabench': 'vlabench',
+    'vlabench_15': 'vlabench',
+    'vlabench_30': 'vlabench',
+    'agibotbeta': 'agibot_45',
+    'robocoin': 'robocoin_10',
+}
+
+
+def _relative_stats_path(action_data_root: str, dataset: str) -> str:
+    root = os.path.normpath(action_data_root)
+    if os.path.basename(root) != "regression_relative":
+        root = os.path.join(root, "regression_relative")
+    dataset_key = dataset.lower()
+    stats_dir = os.path.join(root, _REGRESSION_DATA_SUBDIR.get(dataset_key, dataset_key))
+    return os.path.join(stats_dir, f"relative_action_stats_{dataset_key}.json")
+
 
 def run_regress(args) -> None:
     """Run regression evaluation."""
@@ -231,13 +254,18 @@ def run_regress(args) -> None:
     # ── global_stats_json ─────────────────────────────────────────────────
     # Explicit CLI override takes priority; otherwise auto-detect from DATA_DIR.
     global_stats_json = getattr(args, 'global_stats_json', None)
+    if not global_stats_json and args.action_mode == "relative":
+        action_root = args.action_data_root or os.environ.get("DATA_DIR")
+        if action_root:
+            global_stats_json = _relative_stats_path(action_root, dataset)
     if not global_stats_json and dataset in _STATS_JSON_NAME:
         data_root = get_data_root(dataset, 'seen_train')
         if data_root:
             candidate = os.path.join(data_root, _STATS_JSON_NAME[dataset])
             global_stats_json = candidate  # pass even if not (yet) accessible
 
-    save_dir = config.paths.log_dir / "regression" / "logs" / f"{dataset}_{args.stride}_{args.model}"
+    run_name = f"{dataset}_{args.stride}_{args.model}_{args.model_type}_{args.action_mode}"
+    save_dir = config.paths.log_dir / "regression" / "logs" / run_name
 
     # Determine num_gpus from CUDA_VISIBLE_DEVICES
     # Default to 8 GPUs if not set or empty
@@ -274,10 +302,13 @@ def run_regress(args) -> None:
         "--lr", str(args.lr),
         "--dataset", dataset,
         "--stride", str(args.stride),
+        "--action_mode", args.action_mode,
         "--wandb_project", "lary",
-        "--wandb_name", f"{args.model}-{dataset}-{args.stride}-{args.model_type}",
+        "--wandb_name", f"{args.model}-{dataset}-{args.stride}-{args.model_type}-{args.action_mode}",
     ]
 
+    if args.action_data_root:
+        cmd += ["--action_data_root", args.action_data_root]
     if val_unseen_csv:
         cmd += ["--val_unseen_csv", str(val_unseen_csv)]
     if global_stats_json:

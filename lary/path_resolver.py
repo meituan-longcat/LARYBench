@@ -173,15 +173,29 @@ def resolve_la_path(la_path, dataset=None, split=None, model='dinov2'):
     if not la_path or os.path.isabs(la_path):
         return la_path
 
+    normalized = str(la_path).replace("\\", "/")
+    parts = normalized.split("/")
+    filename = parts[-1]
+
+    # Newer extraction CSVs may already store a portable path such as
+    # calvin/train/dinov2/latent_action_00000000.npz.  In that case, prepend
+    # only the LA root; do not prepend the dataset/stride/split/model prefix
+    # again.
+    if len(parts) > 1:
+        la_root = get_la_root()
+        if la_root:
+            return os.path.join(la_root, *parts)
+        return os.path.join(*parts)
+
     if dataset and split:
         prefix = _la_prefix(dataset, split, model)
         if prefix:
-            return os.path.join(prefix, la_path)
+            return os.path.join(prefix, filename)
 
     la_root = get_la_root()
     if la_root:
-        return os.path.join(la_root, la_path)
-    return la_path
+        return os.path.join(la_root, filename)
+    return filename
 
 
 def resolve_data_path(path, dataset=None, split=None):
