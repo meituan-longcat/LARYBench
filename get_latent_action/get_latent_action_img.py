@@ -164,7 +164,7 @@ class ActionProcessor:
                     clip_indices_batch = torch.tensor([0, self.args.stride], device="cuda").unsqueeze(0).repeat(batch_size, 1)
                     batch_tokens = self.model(clips_batch, clip_indices_batch)[0].cpu().numpy() # B 196 1024
                     batch_ids = [np.array([]) for _ in range(len(batch_tokens))]
-                elif self.args.model == 'dinov3-origin':
+                elif self.args.model == 'dinov3-origin' or self.args.model == 'dinov2-origin' or self.args.model == 'siglip2-origin':
                     batch_input = batch_data.to("cuda")
                     
                     batch_tokens = get_latent_action(batch_input, self.model, self.args.model)

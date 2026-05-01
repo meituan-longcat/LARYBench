@@ -158,7 +158,7 @@ class ActionDataset(Dataset):
             if tensor.shape[1] != 224 or tensor.shape[2] != 224:
                 print("\nbig mistake!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n")
             tensor = tensor[indices]
-        elif self.args.model == 'dinov3-origin':
+        elif self.args.model == 'dinov3-origin' or self.args.model == 'dinov2-origin' or self.model == 'siglip2-origin':
             pair = np.stack(selected_frames)
             tensor = torch.tensor(pair, dtype=torch.float32).permute(3, 0, 1, 2)
         elif self.args.model == 'flux2':
@@ -239,7 +239,7 @@ class ActionProcessor:
                 
                     batch_tokens = self.model(clips_batch, clip_indices_batch)[0].cpu().numpy()
                     batch_ids = [np.array([]) for _ in range(len(batch_tokens))]
-                elif self.args.model == 'dinov3-origin':
+                elif self.args.model == 'dinov3-origin' or self.args.model == 'dinov2-origin' or self.args.model == 'siglip2-origin':
                     batch_input = batch_tensors.to("cuda")
                     
                     batch_tokens = get_latent_action(batch_input, self.model, self.args.model)

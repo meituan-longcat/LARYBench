@@ -81,14 +81,13 @@ def load_dinov3(cpu=True):
         return encoder.eval()
     else:
         return encoder.cuda()
-    
+
 def get_siglip2_encoder(cpu=True):
     """Load SigLIP2 vision encoder from SIGLIP2_PATH env variable."""
     from transformers import AutoModel
     model_path = _SIGLIP2_PATH
     if model_path is None:
         raise ValueError("SIGLIP2_PATH environment variable is not set.")
-    model_path = model_path.replace("hdfs:///", "/mnt/hdfs/")
     encoder = AutoModel.from_pretrained(
         model_path,
         low_cpu_mem_usage=True,
@@ -163,6 +162,28 @@ def get_dino_reps(input_tensor, encoder):
     x = x.reshape(batch_size, 1, 16, 16, dim)
     return x # [bs, 1, 16, 16, 1024]
 
+def get_siglip2_reps(input_tensor, encoder):
+    '''
+    expect input_tensor has the same property as the input of magvit:
+        输入是0-1的tensor图像就可以了, 输入形状应该为类似：64, 3, 1, 224, 224
+    '''
+    # transform
+    input_tensor = input_tensor.squeeze(2)
+    
+    with torch.no_grad():
+        outputs = encoder(
+                pixel_values=input_tensor,
+                output_hidden_states=False,
+                return_dict=True)
+    last_hidden_states = outputs.last_hidden_state #  [bs, 196, 1024]
+    x = last_hidden_states.detach()
+    x = x.unsqueeze(1) # [bs, 1, 196, 1024]
+    
+    batch_size, _, _, dim = x.shape
+
+    x = x.reshape(batch_size, 1, 14, 14, dim)
+    return x # [bs, 1, 16, 16, 1024]
+
 def get_reps_magvit2(input_tensor, model):
     # 输入是0-1的tensor图像就可以了, 输入形状应该为类似：64, 3, 1, 224, 224
     with torch.no_grad():
@@ -190,6 +211,11 @@ def get_dinov3_tokenizer():
     dino_tokenizer = load_dinov3(cpu=False)
     freeze_backbone(dino_tokenizer)
     return dino_tokenizer
+
+def get_siglip2_tokenizer():
+    siglip2_tokenizer = get_siglip2_encoder(cpu=False)
+    freeze_backbone(siglip2_tokenizer)
+    return siglip2_tokenizer
 
 def load_vqgan_new(config, model_type, ckpt_path=None):
     model = VQModel(**config.model.init_args, model_type=model_type)

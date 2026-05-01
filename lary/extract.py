@@ -153,7 +153,7 @@ class VideoActionDataset(Dataset):
         elif self.model == 'villa-x':
             tensor, _ = read_video_tensor(video_path, resize_h=self.image_size, resize_w=self.image_size)
             tensor = tensor[indices]
-        elif self.model == 'dinov3-origin':
+        elif self.model == 'dinov3-origin' or self.model == 'dinov2-origin' or self.model == 'siglip2-origin':
             pair = np.stack(selected_frames)
             tensor = torch.tensor(pair, dtype=torch.float32).permute(3, 0, 1, 2)
         elif self.model == 'flux2':
@@ -406,7 +406,7 @@ class LatentActionExtractor:
             batch_tokens = self.model(clips_batch, clip_indices_batch)[0].cpu().numpy()
             batch_ids = [np.array([]) for _ in range(len(batch_tokens))]
 
-        elif self.config.model == 'dinov3-origin':
+        elif self.config.model == 'dinov3-origin' or self.config.model == 'dinov2-origin' or self.config.model == 'siglip2-origin':
             batch_input = batch_data.to("cuda")
             batch_tokens = get_latent_action(batch_input, self.model, self.config.model)
             batch_ids = [np.array([]) for _ in range(len(batch_tokens))]

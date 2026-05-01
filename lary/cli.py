@@ -51,14 +51,18 @@ Examples:
                                 help="Batch size for processing")
     extract_parser.add_argument("--num-workers", type=int, default=8,
                                 help="Number of data loading workers")
-    extract_parser.add_argument("--gpus", type=str, default="0,1,2,3,4,5,6,7",
-                                help="Comma-separated GPU IDs")
+    extract_parser.add_argument("--gpus", type=str, default="0",
+                                help="Comma-separated GPU IDs. Multiple IDs run extraction partitions in parallel.")
     extract_parser.add_argument("--mode", type=str, choices=["video", "image"], default="video",
                                 help="Processing mode: video or image pairs")
     extract_parser.add_argument("--stride", type=int, default=5,
                                 help="Stride for frame sampling (image mode)")
     extract_parser.add_argument("--perspective", type=str, default="1st",
                                 help="Camera perspective (for some datasets)")
+    extract_parser.add_argument("--partition", type=int, default=0,
+                                help="Partition index for a single extraction worker")
+    extract_parser.add_argument("--num-partitions", type=int, default=1,
+                                help="Total number of extraction partitions")
 
     # ===== Classification command =====
     classify_parser = subparsers.add_parser("classify", help="Run classification evaluation")
@@ -131,12 +135,101 @@ def setup_environment(model: str) -> None:
     os.environ["USE_MODEL"] = model
 
 
+def _parse_gpu_ids(gpus: str) -> List[int]:
+    """Parse comma-separated GPU IDs."""
+    ids = [g.strip() for g in gpus.split(",") if g.strip()]
+    if not ids:
+        raise ValueError("--gpus must contain at least one GPU id")
+    return [int(g) for g in ids]
+
+
+def _extract_csv_base_name(split: str, dataset: str, model: str, mode: str, stride: int) -> str:
+    if mode == "image":
+        return f"{split}_la_{dataset}_{stride}_{model}"
+    return f"{split}_la_{dataset}_{model}"
+
+
+def _merge_extract_partition_csvs(args, num_partitions: int) -> Path:
+    """Merge partition CSVs into the canonical latent-action CSV."""
+    import pandas as pd
+
+    from lary.config import get_config
+
+    config = get_config()
+    lary_root = os.environ.get("LARY_ROOT", str(config.paths.project_root))
+    data_out_dir = Path(lary_root) / "data"
+    base_name = _extract_csv_base_name(args.split, args.dataset, args.model, args.mode, args.stride)
+    merged_csv = data_out_dir / f"{base_name}.csv"
+    partition_csvs = [data_out_dir / f"{base_name}_{i}.csv" for i in range(num_partitions)]
+    missing = [p for p in partition_csvs if not p.exists()]
+    if missing:
+        missing_text = "\n".join(f"  {p}" for p in missing)
+        raise FileNotFoundError(f"Cannot merge extraction partitions. Missing CSVs:\n{missing_text}")
+
+    merged = pd.concat((pd.read_csv(p) for p in partition_csvs), ignore_index=True)
+    merged.to_csv(merged_csv, index=False)
+    return merged_csv
+
+
+def _spawn_extract_partitions(args, gpus: List[int]) -> None:
+    """Run one extraction worker per GPU and merge partition CSVs."""
+    import subprocess
+
+    num_partitions = len(gpus)
+    env_base = os.environ.copy()
+    processes = []
+
+    for partition, gpu in enumerate(gpus):
+        env = env_base.copy()
+        env["CUDA_VISIBLE_DEVICES"] = str(gpu)
+
+        cmd = [
+            sys.executable, "-m", "lary.cli", "extract",
+            "--model", args.model,
+            "--dataset", args.dataset,
+            "--split", args.split,
+            "--batch-size", str(args.batch_size),
+            "--num-workers", str(args.num_workers),
+            "--gpus", str(gpu),
+            "--mode", args.mode,
+            "--stride", str(args.stride),
+            "--perspective", args.perspective,
+            "--partition", str(partition),
+            "--num-partitions", str(num_partitions),
+        ]
+        if args.input:
+            cmd += ["--input", args.input]
+        if args.output:
+            cmd += ["--output", args.output]
+
+        print(f"Starting extraction partition {partition}/{num_partitions - 1} on GPU {gpu}")
+        processes.append((partition, gpu, subprocess.Popen(cmd, env=env)))
+
+    failures = []
+    for partition, gpu, process in processes:
+        returncode = process.wait()
+        if returncode != 0:
+            failures.append((partition, gpu, returncode))
+
+    if failures:
+        for partition, gpu, returncode in failures:
+            print(f"Extraction partition {partition} on GPU {gpu} failed with exit code {returncode}")
+        sys.exit(1)
+
+    merged_csv = _merge_extract_partition_csvs(args, num_partitions)
+    print(f"All extraction partitions finished. Merged CSV saved to {merged_csv}")
+
+
 def run_extract(args) -> None:
     """Run latent action extraction."""
     from lary.extract import extract_latent_actions
 
-    gpus = [int(g) for g in args.gpus.split(",")]
+    gpus = _parse_gpu_ids(args.gpus)
     setup_environment(args.model)
+
+    if len(gpus) > 1 and args.num_partitions == 1 and args.partition == 0:
+        _spawn_extract_partitions(args, gpus)
+        return
 
     extract_latent_actions(
         model=args.model,
@@ -150,6 +243,8 @@ def run_extract(args) -> None:
         mode=args.mode,
         stride=args.stride,
         perspective=args.perspective,
+        partition=args.partition,
+        num_partitions=args.num_partitions,
     )
 
 

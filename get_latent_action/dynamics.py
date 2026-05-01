@@ -22,7 +22,7 @@ elif env_model == 'wan2-2':
 elif env_model == 'vjepa2':
     from get_latent_action.models.vjepa2.evals.video_classification_frozen.models import init_module
 else:
-    from get_latent_action.tokenizer import get_dinov3_tokenizer, get_dinov3_reps
+    from get_latent_action.tokenizer import get_dinov3_tokenizer, get_dino_tokenizer, get_siglip2_tokenizer, get_dinov3_reps, get_dino_reps, get_siglip2_reps
     from get_latent_action.models.laq_model import LatentActionQuantization, LatentActionQuantizationDinov2Feature, LatentActionQuantizationDinov3Feature, LatentActionQuantizationSiglipv2Feature, LatentActionQuantizationMagvit2
     from get_latent_action.models.univla.genie.model import ControllableDINOLatentActionModel
 
@@ -175,6 +175,10 @@ def get_dynamic_tokenizer(model):
         )
     elif model == 'dinov3-origin':
         dynamics = get_dinov3_tokenizer()
+    elif model == 'dinov2-origin':
+        dynamics = get_dino_tokenizer()
+    elif model == 'siglip2-origin':
+        dynamics = get_siglip2_tokenizer()
     elif 'dinov3-cs' in model:
         import re
         cs_match = re.search(r'cs(\d+)', model)
@@ -210,7 +214,7 @@ def get_dynamic_tokenizer(model):
     # freeze 
     if model == 'wan2-2':
         freeze_backbone(dynamics.model)
-    elif model == 'dinov3-origin':
+    elif model == 'dinov3-origin' or model == 'dinov2-origin' or model == 'siglip2-origin':
         pass
     else:
         freeze_backbone(dynamics)
@@ -251,6 +255,20 @@ def get_latent_action(x, tokenizer, model_name):
             b, c, f, h, w = x.shape
             x = x.reshape(b*f, c, 1, h, w)
             x = get_dinov3_reps(x, tokenizer)
+            dim = x.shape[-1]
+            tokens = x.reshape(b, f, -1, dim)
+            return tokens.cpu().numpy()
+        elif model_name == 'dinov2-origin':
+            b, c, f, h, w = x.shape
+            x = x.reshape(b*f, c, 1, h, w)
+            x = get_dino_reps(x, tokenizer)
+            dim = x.shape[-1]
+            tokens = x.reshape(b, f, -1, dim)
+            return tokens.cpu().numpy()
+        elif model_name == 'siglip2-origin':
+            b, c, f, h, w = x.shape
+            x = x.reshape(b*f, c, 1, h, w)
+            x = get_siglip2_reps(x, tokenizer)
             dim = x.shape[-1]
             tokens = x.reshape(b, f, -1, dim)
             return tokens.cpu().numpy()

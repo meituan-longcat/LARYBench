@@ -38,6 +38,20 @@ GROUP_INDICES = {
     'robocoin':  {'position': [0, 1, 2, 6, 7, 8], 'orientation': [3, 4, 5, 9, 10, 11]},
 }
 
+REGRESSION_DATA_SUBDIR = {
+    'calvin': 'calvin',
+    'vlabench': 'vlabench',
+    'vlabench_15': 'vlabench',
+    'vlabench_30': 'vlabench',
+    'agibotbeta': 'agibot_45',
+    'robocoin': 'robocoin_10',
+}
+
+REGRESSION_SPLIT_DIR = {
+    ('calvin', 'train'): 'train_stride5',
+    ('calvin', 'val'): 'val_stride5',
+}
+
 def get_dim_labels(dataset_name):
     if dataset_name == 'agibotbeta': return DIM_AGIBOT
     elif dataset_name == 'robocoin': return DIM_ROBOCOIN
@@ -51,6 +65,75 @@ def get_action_dim(dataset_name):
 def get_group_indices(dataset_name):
     """返回当前数据集的 position / orientation / gripper 分组索引，不存在则返回 None。"""
     return GROUP_INDICES.get(dataset_name, None)
+
+def get_action_steps(chunk_size, action_mode):
+    return 1 if action_mode == 'relative' else chunk_size
+
+def get_regression_root(action_data_root, action_mode='absolute'):
+    root = action_data_root or os.environ.get('DATA_DIR')
+    if not root:
+        return None
+    root = os.path.normpath(root)
+    expected_leaf = 'regression_relative' if action_mode == 'relative' else 'regression'
+    if os.path.basename(root) == expected_leaf:
+        return root
+    return os.path.join(root, expected_leaf)
+
+def get_regression_data_subdir(dataset_name):
+    dataset_key = dataset_name.lower()
+    return REGRESSION_DATA_SUBDIR.get(dataset_key, dataset_key)
+
+def get_relative_stats_path(action_data_root, dataset_name):
+    regression_root = get_regression_root(action_data_root, 'relative')
+    if not regression_root:
+        return None
+    subdir = get_regression_data_subdir(dataset_name)
+    stats_dir = os.path.join(regression_root, subdir)
+    dataset_key = dataset_name.lower()
+    dataset_specific = os.path.join(stats_dir, f"relative_action_stats_{dataset_key}.json")
+    default = os.path.join(stats_dir, "relative_action_stats.json")
+    if os.path.exists(dataset_specific):
+        return dataset_specific
+    if os.path.exists(default):
+        return default
+    return dataset_specific
+
+def get_action_data_root(action_data_root, dataset_name, split, action_mode='absolute'):
+    if action_mode != 'relative' and not action_data_root:
+        return None
+    regression_root = get_regression_root(action_data_root, action_mode)
+    if not regression_root:
+        return None
+    dataset_key = dataset_name.lower()
+    subdir = get_regression_data_subdir(dataset_name)
+    root = os.path.join(regression_root, subdir)
+    split_dir = REGRESSION_SPLIT_DIR.get((dataset_key, split.lower()))
+    if split_dir:
+        root = os.path.join(root, split_dir)
+    return root
+
+def resolve_under_root(root, subdir, value):
+    if value is None or pd.isna(value):
+        return value
+    path = str(value)
+    if os.path.isabs(path):
+        return path
+    if subdir and subdir in Path(path).parts:
+        return os.path.join(root, path)
+    effective_root = os.path.join(root, subdir) if subdir else root
+    return os.path.join(effective_root, path)
+
+def to_action_target(action, action_dim, action_mode):
+    action = np.asarray(action)
+    flat = action.reshape(-1)
+    if action_mode == 'relative':
+        if flat.size == action_dim:
+            return flat.astype(np.float32, copy=False)
+        if flat.size % action_dim != 0:
+            raise ValueError(f"Action size {flat.size} is not divisible by action_dim={action_dim}.")
+        seq = flat.reshape(-1, action_dim)
+        return (seq[-1] - seq[0]).astype(np.float32, copy=False)
+    return flat.astype(np.float32, copy=False)
 
 # ==========================================
 # Utils
@@ -114,22 +197,22 @@ def save_separate_eval_samples(
     plt.savefig(vis_dir / f"{file_prefix}_action.png", format='png', dpi=150, bbox_inches='tight')
     plt.close()
 
-def compute_per_dim_mse(pred, target, chunk_size, action_dim_labels):
+def compute_per_dim_mse(pred, target, action_steps, action_dim_labels):
     num_dims = len(action_dim_labels)
-    pred_reshaped = pred.view(-1, chunk_size, num_dims)
-    target_reshaped = target.view(-1, chunk_size, num_dims)
+    pred_reshaped = pred.view(-1, action_steps, num_dims)
+    target_reshaped = target.view(-1, action_steps, num_dims)
     squared_diff = (pred_reshaped - target_reshaped) ** 2
     mse_per_dim = squared_diff.mean(dim=(0, 1))
     return {label: mse_per_dim[i].item() for i, label in enumerate(action_dim_labels)}
 
-def compute_group_mse(pred, target, chunk_size, dataset_name):
+def compute_group_mse(pred, target, action_steps, dataset_name):
     """计算 position / orientation / gripper 三个语义分组的平均 MSE。"""
     group_indices = get_group_indices(dataset_name)
     if group_indices is None:
         return {}
     action_dim = get_action_dim(dataset_name)
-    pred_reshaped = pred.view(-1, chunk_size, action_dim)
-    target_reshaped = target.view(-1, chunk_size, action_dim)
+    pred_reshaped = pred.view(-1, action_steps, action_dim)
+    target_reshaped = target.view(-1, action_steps, action_dim)
     squared_diff = (pred_reshaped - target_reshaped) ** 2  # (B, T, D)
     result = {}
     for group_name, indices in group_indices.items():
@@ -140,11 +223,24 @@ def compute_group_mse(pred, target, chunk_size, dataset_name):
 # 1. Dataset Definition
 # ==========================================
 class ActionExpertDataset(Dataset):
-    def __init__(self, csv_path, dataset_name, chunk_size, global_stats_json=None, action_mean=None, action_std=None):
+    def __init__(
+        self,
+        csv_path,
+        dataset_name,
+        chunk_size,
+        global_stats_json=None,
+        action_mean=None,
+        action_std=None,
+        action_mode='absolute',
+        action_data_root=None,
+    ):
         self.data = pd.read_csv(csv_path)
         self.dataset_name = dataset_name
         self.chunk_size = chunk_size
         self.action_dim = get_action_dim(dataset_name)
+        self.action_mode = action_mode
+        self.action_steps = get_action_steps(chunk_size, action_mode)
+        self.action_data_root = action_data_root
         
         # Detect split from CSV path or filename
         self.split = self._detect_split(csv_path)
@@ -161,7 +257,10 @@ class ActionExpertDataset(Dataset):
         if global_stats_json and os.path.exists(global_stats_json):
             with open(global_stats_json, 'r') as f:
                 raw_stats = json.load(f)
-                for r_type, stats in raw_stats.items():
+                robot_raw_stats = raw_stats.get('robot_stats', raw_stats)
+                for r_type, stats in robot_raw_stats.items():
+                    if not isinstance(stats, dict) or 'mean' not in stats or 'std' not in stats:
+                        continue
                     m_arr = np.array(stats['mean'])
                     s_arr = np.array(stats['std'])
                     s_arr = np.where(s_arr < 1e-6, 1.0, s_arr)
@@ -189,6 +288,7 @@ class ActionExpertDataset(Dataset):
         from lary.path_resolver import resolve_la_path, get_data_root
 
         data_root = get_data_root(self.dataset_name, self.split)
+        action_root = get_action_data_root(self.action_data_root, self.dataset_name, self.split, self.action_mode)
 
         # Static column→subdirectory mapping per dataset.
         # 'None' means the column does not exist on disk and should be skipped.
@@ -197,29 +297,23 @@ class ActionExpertDataset(Dataset):
                 'src_img':   'images',
                 'tgt_img':   'images',
                 'action':    'actions',
-                'src_state': None,   # no states stored for calvin
-                'tgt_state': None,
             },
             'agibotbeta': {
                 'src_img':   'images',
                 'tgt_img':   'images',
                 'action':    'actions',
-                'src_state': None,
-                'tgt_state': None,
             },
             'robocoin': {
                 'src_img':   'images',
                 'tgt_img':   'images',
                 'action':    'actions',
-                'src_state': None,
-                'tgt_state': None,
             },
         }
 
         col_subdir = DATASET_COL_SUBDIR.get(self.dataset_name.lower(), {})
 
         # Resolve data paths — pure string operations, zero HDFS stat calls
-        data_path_cols = ['src_img', 'src_state', 'tgt_img', 'tgt_state', 'action']
+        data_path_cols = ['src_img', 'tgt_img', 'action']
         for col in data_path_cols:
             if col not in self.data.columns:
                 continue
@@ -229,10 +323,15 @@ class ActionExpertDataset(Dataset):
                 # won't try to load it.
                 self.data[col] = None
                 continue
+            if col == 'action' and action_root:
+                self.data[col] = self.data[col].apply(
+                    lambda x: resolve_under_root(action_root, subdir, x)
+                )
+                continue
             effective_root = os.path.join(data_root, subdir) if (data_root and subdir) else data_root
             if effective_root:
                 self.data[col] = self.data[col].apply(
-                    lambda x: os.path.join(effective_root, str(x))
+                    lambda x: resolve_under_root(data_root, subdir, x)
                     if pd.notna(x) and not os.path.isabs(str(x)) else x
                 )
 
@@ -244,11 +343,11 @@ class ActionExpertDataset(Dataset):
             first_valid = first_valid[~first_valid.apply(lambda x: os.path.isabs(str(x)))]
             if not first_valid.empty:
                 resolved_first = resolve_la_path(str(first_valid.iloc[0]), self.dataset_name, self.split)
-                fname = str(first_valid.iloc[0])
+                fname = os.path.basename(str(first_valid.iloc[0]))
                 la_prefix = resolved_first[: resolved_first.rfind(fname)]
                 if la_prefix:
                     self.data['la_path'] = self.data['la_path'].apply(
-                        lambda x: os.path.join(la_prefix, str(x))
+                        lambda x: os.path.join(la_prefix, os.path.basename(str(x)))
                         if pd.notna(x) and not os.path.isabs(str(x)) else x
                     )
                 else:
@@ -261,18 +360,10 @@ class ActionExpertDataset(Dataset):
 
     def __getitem__(self, idx):
         row = self.data.iloc[idx]
-        
-        src_state_val = row.get('src_state') if hasattr(row, 'get') else row['src_state'] if 'src_state' in row.index else None
-        tgt_state_val = row.get('tgt_state') if hasattr(row, 'get') else row['tgt_state'] if 'tgt_state' in row.index else None
-        src_state = np.load(src_state_val) if (src_state_val is not None and pd.notna(src_state_val)) else np.zeros(1)
-        tgt_state = np.load(tgt_state_val) if (tgt_state_val is not None and pd.notna(tgt_state_val)) else np.zeros(1)
-        
+
         la_data = np.load(row['la_path'])
         latent_action = la_data['tokens'].flatten() if 'tokens' in la_data else la_data.flatten()
-        action = np.load(row['action'])
-
-        if action.ndim > 1:
-            action = action.flatten()
+        action = to_action_target(np.load(row['action']), self.action_dim, self.action_mode)
             
         # === 核心修改：根据 robot_type 获取全局 Mean 和 Std ===
         if self.dataset_name in ['agibotbeta', 'robocoin']:
@@ -285,9 +376,9 @@ class ActionExpertDataset(Dataset):
         else:
             a_mean, a_std = self.action_mean, self.action_std
 
-        # 扩展到 chunk_size
-        a_mean_tiled = np.tile(a_mean, self.chunk_size)
-        a_std_tiled = np.tile(a_std, self.chunk_size)
+        # 扩展到输出时间步数：absolute 预测完整 chunk；relative 只预测 last - first。
+        a_mean_tiled = np.tile(a_mean, self.action_steps)
+        a_std_tiled = np.tile(a_std, self.action_steps)
 
         action_norm = (action - a_mean_tiled) / a_std_tiled
         
@@ -295,9 +386,7 @@ class ActionExpertDataset(Dataset):
         tgt_img_path = str(row['tgt_img']) if 'tgt_img' in row else ""
 
         return (
-            torch.from_numpy(src_state).float(),
             torch.from_numpy(latent_action).float(),
-            torch.from_numpy(tgt_state).float(),
             torch.from_numpy(action_norm).float(),
             src_img_path,
             tgt_img_path,
@@ -329,20 +418,20 @@ class MLPResNet(nn.Module):
         return self.fc2(self.layer_norm2(x))
 
 class ActionExpertMLP(nn.Module):
-    def __init__(self, input_dim, action_dim=7, hidden_dim=4096, num_blocks=2, chunk_size=5):
+    def __init__(self, input_dim, action_dim=7, hidden_dim=4096, num_blocks=2, action_steps=5):
         super().__init__()
         self.action_dim = action_dim
-        self.chunk_size = chunk_size
-        self.model = MLPResNet(num_blocks, input_dim, hidden_dim, action_dim * chunk_size)
+        self.action_steps = action_steps
+        self.model = MLPResNet(num_blocks, input_dim, hidden_dim, action_dim * action_steps)
     def forward(self, latent_action): return self.model(latent_action)
     def loss(self, pred, target): return F.huber_loss(pred, target, delta=1.0)
 
 class ActionExpertDiT(nn.Module):
-    def __init__(self, latent_dim, action_dim=7, chunk_size=5, hidden_size=512, depth=6, num_heads=8):
+    def __init__(self, latent_dim, action_dim=7, action_steps=5, hidden_size=512, depth=6, num_heads=8):
         super().__init__()
-        self.chunk_size = chunk_size
+        self.action_steps = action_steps
         self.action_dim = action_dim
-        self.dit = DiT(in_channels=action_dim, hidden_size=hidden_size, depth=depth, num_heads=num_heads, token_size=latent_dim, future_action_window_size=chunk_size, num_latent_action=1)
+        self.dit = DiT(in_channels=action_dim, hidden_size=hidden_size, depth=depth, num_heads=num_heads, token_size=latent_dim, future_action_window_size=action_steps, num_latent_action=1)
         self.noise_scheduler = DDPMScheduler(num_train_timesteps=1000, beta_schedule='squaredcos_cap_v2', clip_sample=True, prediction_type='epsilon')
 
     def forward(self, latent_action, noisy_actions, timesteps):
@@ -350,7 +439,7 @@ class ActionExpertDiT(nn.Module):
 
     def loss(self, latent_action, action_target):
         batch_size = latent_action.shape[0]
-        gt_action_seq = action_target.view(batch_size, self.chunk_size, self.action_dim)
+        gt_action_seq = action_target.view(batch_size, self.action_steps, self.action_dim)
         timesteps = torch.randint(0, self.noise_scheduler.config.num_train_timesteps, (batch_size,), device=latent_action.device).long()
         noise = torch.randn_like(gt_action_seq)
         noisy_actions = self.noise_scheduler.add_noise(gt_action_seq, noise, timesteps)
@@ -361,7 +450,7 @@ class ActionExpertDiT(nn.Module):
     def sample(self, latent_action):
         batch_size = latent_action.shape[0]
         device = latent_action.device
-        action_seq = torch.randn((batch_size, self.chunk_size, self.action_dim), device=device)
+        action_seq = torch.randn((batch_size, self.action_steps, self.action_dim), device=device)
         self.noise_scheduler.set_timesteps(500) 
         for t in self.noise_scheduler.timesteps:
             model_output = self.dit(action_seq, t.unsqueeze(0).to(device), latent_action.unsqueeze(1))
@@ -371,14 +460,14 @@ class ActionExpertDiT(nn.Module):
 # ==========================================
 # 3. Training & Evaluation Engine (保持不变)
 # ==========================================
-def train_one_epoch(model, loader, optimizer, scheduler, accelerator, epoch, model_type, chunk_size, dim_labels):
+def train_one_epoch(model, loader, optimizer, scheduler, accelerator, epoch, model_type, action_steps, dim_labels):
     model.train()
     total_loss, total_samples = 0.0, 0
     unwrapped_model = accelerator.unwrap_model(model)
     pbar = tqdm(loader, desc=f"Train Epoch {epoch}", disable=not accelerator.is_local_main_process)
         
     for step, batch in enumerate(pbar):
-        src_state, latent_action, tgt_state, action = batch[0], batch[1], batch[2], batch[3]
+        latent_action, action = batch[0], batch[1]
         optimizer.zero_grad()
         
         if model_type == 'dit': loss = unwrapped_model.loss(latent_action, action)
@@ -404,7 +493,7 @@ def train_one_epoch(model, loader, optimizer, scheduler, accelerator, epoch, mod
                         sample_pred, sample_target = model(latent_action), action
                     step_mse = F.mse_loss(sample_pred, sample_target).item()
                     metrics["train/mse"] = step_mse
-                    for k, v in compute_per_dim_mse(sample_pred, sample_target, chunk_size, dim_labels).items(): metrics[f"train/mse_{k}"] = v
+                    for k, v in compute_per_dim_mse(sample_pred, sample_target, action_steps, dim_labels).items(): metrics[f"train/mse_{k}"] = v
                 pbar.set_postfix({'loss': f"{avg_loss:.4f}", 'mse': f"{step_mse:.4f}"})
             else:
                 pbar.set_postfix({'loss': f"{avg_loss:.4f}"})
@@ -412,7 +501,7 @@ def train_one_epoch(model, loader, optimizer, scheduler, accelerator, epoch, mod
 
     return total_loss / total_samples
 
-def evaluate(model, loader, accelerator, model_type, epoch, save_dir, chunk_size, dim_labels, dataset_name, prefix="val"):
+def evaluate(model, loader, accelerator, model_type, epoch, save_dir, action_steps, dim_labels, dataset_name, prefix="val"):
     model.eval()
     all_preds, all_targets = [], []
     total_huber_loss, total_samples = 0.0, 0
@@ -420,8 +509,8 @@ def evaluate(model, loader, accelerator, model_type, epoch, save_dir, chunk_size
     
     with torch.no_grad():
         for step, batch in enumerate(tqdm(loader, desc=f"Evaluating {prefix}", disable=not accelerator.is_local_main_process)):
-            src_state, latent_action, tgt_state, action = batch[0], batch[1], batch[2], batch[3]
-            src_paths, tgt_paths, a_mean, a_std = batch[4], batch[5], batch[6], batch[7]
+            latent_action, action = batch[0], batch[1]
+            src_paths, tgt_paths, a_mean, a_std = batch[2], batch[3], batch[4], batch[5]
 
             if model_type == 'dit':
                 h_loss = unwrapped_model.loss(latent_action, action)
@@ -448,7 +537,7 @@ def evaluate(model, loader, accelerator, model_type, epoch, save_dir, chunk_size
                         std=a_std[i].cpu().numpy(),
                         src_img_path=src_paths[i], 
                         tgt_img_path=tgt_paths[i],
-                        chunk_size=chunk_size, 
+                        chunk_size=action_steps, 
                         epoch=epoch, 
                         save_dir=os.path.join(save_dir, prefix),
                         dim_labels=dim_labels, 
@@ -460,8 +549,8 @@ def evaluate(model, loader, accelerator, model_type, epoch, save_dir, chunk_size
     
     val_loss_final = total_huber_loss / total_samples
     val_total_mse = F.mse_loss(all_preds, all_targets).item()
-    val_dim_metrics = compute_per_dim_mse(all_preds, all_targets, chunk_size, dim_labels)
-    val_group_metrics = compute_group_mse(all_preds, all_targets, chunk_size, dataset_name)
+    val_dim_metrics = compute_per_dim_mse(all_preds, all_targets, action_steps, dim_labels)
+    val_group_metrics = compute_group_mse(all_preds, all_targets, action_steps, dataset_name)
     
     return val_loss_final, val_total_mse, val_dim_metrics, val_group_metrics
 
@@ -496,9 +585,17 @@ def main():
     parser.add_argument('--stride', type=int, default=5)
     parser.add_argument('--dataset', type=str, default='calvin')
     parser.add_argument('--model_type', type=str, default='mlp', choices=['mlp', 'dit'])
+    parser.add_argument('--action_mode', type=str, default='absolute', choices=['absolute', 'relative'],
+                        help="absolute predicts the full action chunk; relative predicts last action minus first action.")
+    parser.add_argument('--action_data_root', type=str, default=None,
+                        help="Optional LARYBench data root. Relative mode reads regression/<dataset>_relative/ under this root.")
     parser.add_argument('--dit_hidden_size', type=int, default=512)
     parser.add_argument('--dit_depth', type=int, default=6)
     args = parser.parse_args()
+    global_stats_json = args.global_stats_json
+    if args.action_mode == 'relative' and global_stats_json is None:
+        global_stats_json = get_relative_stats_path(args.action_data_root, args.dataset)
+    args.global_stats_json = global_stats_json
 
     make_reproducible(args.seed)
     # Do NOT use accelerate's log_with="wandb" — it calls wandb.init() in every
@@ -514,11 +611,27 @@ def main():
         )
 
     action_dim = get_action_dim(args.dataset)
+    action_steps = get_action_steps(args.stride, args.action_mode)
     dim_labels = get_dim_labels(args.dataset)
     
     # Calvin 的全局统计信息
     action_mean, action_std = None, None
-    if args.dataset == 'calvin':
+    if args.action_mode == 'relative' and global_stats_json and os.path.exists(global_stats_json):
+        with open(global_stats_json, 'r') as f:
+            stats = json.load(f)
+        if args.dataset in ['agibotbeta', 'robocoin']:
+            pass
+        else:
+            action_mean = np.array(stats['mean'])
+            action_std = np.array(stats['std'])
+            action_std = np.where(action_std < 1e-6, 1.0, action_std)
+    elif args.action_mode == 'relative':
+        raise FileNotFoundError(
+            "Relative action mode requires relative-action statistics. "
+            f"Expected: {global_stats_json}. Generate them with utils/prepare_relative_actions.py "
+            "or pass --global_stats_json explicitly."
+        )
+    elif args.dataset == 'calvin':
         action_mean = np.array([0.03993005, -0.1113833 ,  0.50033228,  1.04580053, -0.08165425, 1.58390577, -0.08441296]) 
         action_std = np.array([0.14403107, 0.09919957, 0.05518382, 2.89455128, 0.13053949, 0.57474015, 0.99643086]) 
     elif args.dataset not in ['agibotbeta', 'robocoin']:
@@ -526,24 +639,35 @@ def main():
         action_std = np.array([0.15966601, 0.13813421, 0.1362726 , 2.70449661, 0.63210694, 1.72885403, 0.49764945]) 
 
 
-    train_dataset = ActionExpertDataset(args.train_csv, args.dataset, args.stride, args.global_stats_json, action_mean, action_std)
-    val_dataset = ActionExpertDataset(args.val_csv, args.dataset, args.stride, args.global_stats_json, action_mean, action_std)
+    train_dataset = ActionExpertDataset(
+        args.train_csv, args.dataset, args.stride, global_stats_json, action_mean, action_std,
+        action_mode=args.action_mode, action_data_root=args.action_data_root
+    )
+    val_dataset = ActionExpertDataset(
+        args.val_csv, args.dataset, args.stride, global_stats_json, action_mean, action_std,
+        action_mode=args.action_mode, action_data_root=args.action_data_root
+    )
     
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True)
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, pin_memory=True)
 
     val_unseen_loader = None
     if args.val_unseen_csv and os.path.exists(args.val_unseen_csv):
-        val_unseen_dataset = ActionExpertDataset(args.val_unseen_csv, args.dataset, args.stride, args.global_stats_json, action_mean, action_std)
+        val_unseen_dataset = ActionExpertDataset(
+            args.val_unseen_csv, args.dataset, args.stride, global_stats_json, action_mean, action_std,
+            action_mode=args.action_mode, action_data_root=args.action_data_root
+        )
         val_unseen_loader = DataLoader(val_unseen_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, pin_memory=True)
 
-    sample_la = train_dataset[0][1]
+    sample_la = train_dataset[0][0]
     la_dim = sample_la.shape[0]
+    if accelerator.is_local_main_process:
+        print(f"Regression dimensions: latent_action_dim={la_dim}, action_output_dim={action_dim * action_steps}")
 
     if args.model_type == 'dit':
-        model = ActionExpertDiT(latent_dim=la_dim, action_dim=action_dim, chunk_size=args.stride, hidden_size=args.dit_hidden_size, depth=args.dit_depth)
+        model = ActionExpertDiT(latent_dim=la_dim, action_dim=action_dim, action_steps=action_steps, hidden_size=args.dit_hidden_size, depth=args.dit_depth)
     else:
-        model = ActionExpertMLP(input_dim=la_dim, action_dim=action_dim, hidden_dim=4096, num_blocks=2, chunk_size=args.stride)
+        model = ActionExpertMLP(input_dim=la_dim, action_dim=action_dim, hidden_dim=4096, num_blocks=2, action_steps=action_steps)
     
     if accelerator.is_local_main_process: print_model_params(model)
 
@@ -556,11 +680,11 @@ def main():
     best_val_mse = float('inf')
     best_result = {}  # 用于记录最佳结果
     for epoch in range(1, args.epochs + 1):
-        train_loss = train_one_epoch(model, train_loader, optimizer, scheduler, accelerator, epoch, args.model_type, args.stride, dim_labels)
-        val_loss, val_mse, val_dim_metrics, val_group_metrics = evaluate(model, val_loader, accelerator, args.model_type, epoch, args.save_dir, args.stride, dim_labels, args.dataset, prefix="val_seen")
+        train_loss = train_one_epoch(model, train_loader, optimizer, scheduler, accelerator, epoch, args.model_type, action_steps, dim_labels)
+        val_loss, val_mse, val_dim_metrics, val_group_metrics = evaluate(model, val_loader, accelerator, args.model_type, epoch, args.save_dir, action_steps, dim_labels, args.dataset, prefix="val_seen")
         
         if val_unseen_loader:
-            u_val_loss, u_val_mse, u_val_dim_metrics, u_val_group_metrics = evaluate(model, val_unseen_loader, accelerator, args.model_type, epoch, args.save_dir, args.stride, dim_labels, args.dataset, prefix="val_unseen")
+            u_val_loss, u_val_mse, u_val_dim_metrics, u_val_group_metrics = evaluate(model, val_unseen_loader, accelerator, args.model_type, epoch, args.save_dir, action_steps, dim_labels, args.dataset, prefix="val_unseen")
     
         if accelerator.is_local_main_process:
             log_dict = {"loss/train": train_loss, "loss/val_seen": val_loss, "val_seen/mse": val_mse, "epoch": epoch, "lr": optimizer.param_groups[0]['lr']}
