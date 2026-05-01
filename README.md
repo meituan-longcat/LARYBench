@@ -55,8 +55,9 @@ Given any model that produces latent action representations (LAMs or visual enco
 5. [Quick Start](#quick-start)
 6. [Relative-Action Regression](#relative-action-regression)
 7. [Supported Models](#supported-models)
-8. [Supported Datasets](#supported-datasets)
-9. [Evaluation Outputs](#outputs)
+8. [Adding a Custom Model](#adding-a-custom-model)
+9. [Supported Datasets](#supported-datasets)
+10. [Evaluation Outputs](#evaluation-outputs)
 
 ---
 
@@ -301,6 +302,49 @@ CUDA_VISIBLE_DEVICES=0 python -m lary.cli regress \
 | `flux2` | FLUX.2 VAE features | `larybench`; set `AE_MODEL_PATH` |
 | `vjepa2` | V-JEPA2 video features | upstream `vjepa2` env |
 | `wan2-2` | Wan2.2 VAE features | upstream `wan` env |
+
+## Adding a Custom Model
+
+LARYBench only needs your model to convert a video or image pair into a numeric `tokens` array saved in each latent-action `.npz` file.
+
+1. Add model-specific imports in [get_latent_action/dynamics.py](get_latent_action/dynamics.py), guarded by `USE_MODEL` if the dependency is optional.
+
+```python
+env_model = os.environ.get("USE_MODEL")
+if env_model == "my-model":
+    from my_project import MyModel
+```
+
+2. Register the model loader in `get_dynamic_tokenizer(model)`.
+
+```python
+elif model == "my-model":
+    dynamics = MyModel.from_pretrained(os.environ["MY_MODEL_CKPT"]).cuda()
+```
+
+3. Add the forward branch in `get_latent_action(x, tokenizer, model_name)` and return either `(tokens, indices)` or `tokens`. Classification and regression use `tokens`; `tokens.shape[-1]` is the `--dim` value for classification.
+
+```python
+elif model_name == "my-model":
+    tokens = tokenizer(x)          # expected shape: (B, ..., D)
+    indices = np.array([])
+```
+
+4. If the model needs a different input format, add a matching branch in [lary/extract.py](lary/extract.py) for dataset preprocessing and batch execution. Reuse existing branches such as `dinov2-origin`, `vjepa2`, or `wan2-2` as templates.
+
+5. Set any required environment variables in `env.sh`, then run:
+
+```bash
+python -m lary.cli extract \
+  --model my-model \
+  --dataset calvin \
+  --split train/val \
+  --mode image \
+  --stride 5 \
+  --gpus 0
+```
+
+After extraction creates `data/val_la_<dataset>_<stride>_my-model.csv` or `data/val_la_<dataset>_my-model.csv`, the existing `classify` and `regress` commands can evaluate it without model-specific changes.
 
 ## Supported Datasets
 
