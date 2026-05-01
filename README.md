@@ -314,7 +314,7 @@ CUDA_VISIBLE_DEVICES=0 python -m lary.cli regress \
 ### Regression Datasets
 
 | Dataset key | Splits | Stride |
-|---|---|---:|---|
+|---|---|---|
 | `calvin` | `train`, `val` | 5 |
 | `vlabench` | `train`, `val` | 5 |
 | `vlabench_15` | `train`, `val` | 15 |
