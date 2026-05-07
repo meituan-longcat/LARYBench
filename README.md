@@ -153,6 +153,20 @@ python utils/prepare_ssv2_egodex.py \
   --workers 16
 ```
 
+For AgibotBeta and RoboCOIN regression, compute per-robot action normalization statistics from the train split before training absolute-action probes. The outputs are read automatically by `lary.cli regress`.
+
+```bash
+python utils/compute_robot_action_stats.py \
+  --dataset agibotbeta \
+  --data-root $DATA_DIR
+
+python utils/compute_robot_action_stats.py \
+  --dataset robocoin \
+  --data-root $DATA_DIR
+```
+
+This writes `DATA_DIR/regression/agibot_45/agibotbeta_stats.json` and `DATA_DIR/regression/robocoin_10/robocoin_stats.json`.
+
 To check whether images, videos, and regression `.npy` files exist and can be opened, run the integrity checker. Use `--groups` to scan only selected datasets.
 
 ```bash
