@@ -472,4 +472,4 @@ We thank the following open-source projects for their contributions:
 Please contact us at <a href="mailto:longcat-team@meituan.com">longcat-team@meituan.com</a> or join our WeChat Group if you have any questions.
 
 #### WeChat Group
-<img src="assets/Wechat.png" width = "200" height = "200"  />
+<img src="https://raw.githubusercontent.com/meituan-longcat/LongCat-Flash-Chat/main/wechat-assets/Wechat.png" width="200px">
