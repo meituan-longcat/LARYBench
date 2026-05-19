@@ -96,9 +96,8 @@ Some model families keep their original dependencies and should be configured fr
 
 | Model family | Environment guidance |
 |---|---|
-| `dinov2`, `dinov3`, `siglip2`, `dinov2-origin`, `dinov3-origin`, `siglip2-origin`, `lapa`, `magvit2`, `univla`, `flux2` | Use `larybench` |
+| `dinov2`, `dinov3`, `siglip2`, `dinov2-origin`, `dinov3-origin`, `siglip2-origin`, `lapa`, `magvit2`, `univla`, `flux2`, `wan2-2` | Use `larybench` |
 | `vjepa2` | Follow [facebookresearch/vjepa2](https://github.com/facebookresearch/vjepa2) and activate your `vjepa2` env |
-| `wan2-2` | Follow [Wan-Video/Wan2.2](https://github.com/Wan-Video/Wan2.2) and activate your `wan` env |
 | `villa-x` | Follow [microsoft/villa-x](https://github.com/microsoft/villa-x) and set `VILLA_X_DIR` |
 
 Configure paths in `env.sh`, then source it before running commands. Example:

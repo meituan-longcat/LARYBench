@@ -6,6 +6,7 @@
 import math
 import os
 import pathlib
+import traceback
 import warnings
 from logging import getLogger
 
@@ -49,6 +50,7 @@ def make_videodataset(
     persistent_workers=True,
     deterministic=True,
     log_dir=None,
+    timeout=0,
 ):
     dataset = VideoDataset(
         data_paths=data_paths,
@@ -399,7 +401,12 @@ def make_latentactionvideodataset(
     persistent_workers=True,
     deterministic=True,
     log_dir=None,
+    timeout=0,
+    error_log_dir=None,
 ):
+    log_dir = pathlib.Path(log_dir) if log_dir else None
+    error_log_dir = pathlib.Path(error_log_dir) if error_log_dir else None
+    error_log_path = str(error_log_dir / f"latent_action_errors_rank{rank}.txt") if error_log_dir else None
     """
     创建 LatentActionVideoDataset 及其 DataLoader 的工厂函数。
     """
@@ -418,11 +425,11 @@ def make_latentactionvideodataset(
         filter_long_videos=filter_long_videos,
         shared_transform=shared_transform,
         transform=transform,
+        error_log_path=error_log_path,
     )
 
     # 配置资源监控 (可选)
     if log_dir:
-        log_dir = pathlib.Path(log_dir)
         log_dir.mkdir(parents=True, exist_ok=True)
         resource_log_filename = log_dir / f"resource_file_{rank}_%w.csv"
         # 注意：此处假设 MonitoredDataset 已定义
@@ -477,6 +484,7 @@ def make_latentactionvideodataset(
         pin_memory=pin_mem,
         num_workers=num_workers,
         persistent_workers=(num_workers > 0) and persistent_workers,
+        timeout=timeout,
     )
 
     logger.info("LatentActionVideoDataset data loader created")
@@ -499,8 +507,12 @@ class LatentActionVideoDataset(torch.utils.data.Dataset):
         filter_short_videos=False,
         filter_long_videos=int(10**9),
         duration=None,
+        error_log_path=None,
     ):
         self.csv_path = data_paths[0]
+        self.error_log_path = error_log_path
+        if self.error_log_path:
+            pathlib.Path(self.error_log_path).parent.mkdir(parents=True, exist_ok=True)
         
         # 1. 加载数据并建立映射
         self.samples, self.action_to_id = self._load_all_datasets()
@@ -517,6 +529,11 @@ class LatentActionVideoDataset(torch.utils.data.Dataset):
         
         # Resolve relative la_paths
         if 'la_path' in df.columns:
+            before = len(df)
+            df = df[df['la_path'].notna() & (df['la_path'].astype(str).str.strip() != '')].copy()
+            dropped = before - len(df)
+            if dropped:
+                logger.warning(f"Dropped {dropped} rows with empty la_path from {self.csv_path}")
             df['la_path'] = df['la_path'].apply(
                 lambda x: resolve_la_path(str(x), 'human_1st', 'all') if pd.notna(x) and not os.path.isabs(str(x)) else x
             )
@@ -604,6 +621,8 @@ class LatentActionVideoDataset(torch.utils.data.Dataset):
             # 如果是空的或者是 object 类型的非数值数组，抛出异常
             if delta.size == 0 or delta.dtype == object:
                 raise ValueError(f"Empty or invalid data (dtype={delta.dtype})")
+            if not np.isfinite(delta).all():
+                raise ValueError("Non-finite values in tokens")
 
             # 3. 类型转换
             if delta.dtype != np.float32:
@@ -616,17 +635,25 @@ class LatentActionVideoDataset(torch.utils.data.Dataset):
 
         except Exception as e:
             # 4. 打印错误信息并替换样本
-            print(f"--- [Dataset Error] ---")
-            print(f"Path: {la_path}")
-            print(f"Index: {index}")
-            print(f"Error: {e}")
-            print(f"Action: Switching to a random sample...")
-            print(f"-----------------------")
+            error_text = (
+                "--- [Dataset Error] ---\n"
+                f"Path: {la_path}\n"
+                f"Index: {index}\n"
+                f"Error: {repr(e)}\n"
+                f"Action: Switching to a random sample...\n"
+                "Traceback:\n"
+                f"{traceback.format_exc()}"
+                "-----------------------\n"
+            )
+            print(error_text, end="")
+            if self.error_log_path:
+                with open(self.error_log_path, "a") as f:
+                    f.write(error_text)
 
-            # 随机选择一个新索引进行重试（也可以选择 index + 1 % len(self)）
-            import random
-            new_index = random.randint(0, len(self.samples) - 1)
-            return self.__getitem__(new_index)
+            raise RuntimeError(
+                f"Failed to load latent action: {la_path}. "
+                "Check LARY_LA_DIR and latent-action CSV paths."
+            ) from e
         
 def make_vjepa2videodataset(
     data_paths,
@@ -653,6 +680,7 @@ def make_vjepa2videodataset(
     persistent_workers=True,
     deterministic=True,
     log_dir=None,
+    timeout=0,
 ):
     dataset = VJEPA2VideoDataset(
         data_paths=data_paths,
@@ -714,6 +742,7 @@ def make_vjepa2videodataset(
             pin_memory=pin_mem,
             num_workers=num_workers,
             persistent_workers=(num_workers > 0) and persistent_workers,
+            timeout=timeout,
         )
     else:
         data_loader = NondeterministicDataLoader(
@@ -725,6 +754,7 @@ def make_vjepa2videodataset(
             pin_memory=pin_mem,
             num_workers=num_workers,
             persistent_workers=(num_workers > 0) and persistent_workers,
+            timeout=timeout,
         )
     logger.info("VideoDataset unsupervised data loader created")
 

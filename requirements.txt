@@ -20,3 +20,7 @@ lightning
 beartype
 piq
 rotary_embedding_torch
+ftfy
+easydict
+librosa
+peft

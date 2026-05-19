@@ -308,6 +308,7 @@ class LatentActionExtractor:
     def __init__(self, config: ExtractionConfig):
         self.config = config
         self._setup_model()
+        self._setup_transform()
 
     def _setup_model(self):
         """Initialize the model."""
@@ -318,6 +319,25 @@ class LatentActionExtractor:
             self.model.model.to("cuda").eval()
         else:
             self.model.to("cuda").eval()
+
+    def _setup_transform(self):
+        """Initialize model-specific preprocessing used outside DataLoader workers."""
+        self.transform = None
+        if self.config.model == 'vjepa2':
+            from get_latent_action.models.vjepa2.evals.video_classification_frozen.utils import make_transforms
+
+            self.transform = make_transforms(
+                training=False,
+                num_views_per_clip=1,
+                random_horizontal_flip=False,
+                random_resize_aspect_ratio=(1.0, 1.0),
+                random_resize_scale=(1.0, 1.0),
+                reprob=0,
+                auto_augment=False,
+                motion_shift=False,
+                crop_size=224,
+                normalize=((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+            )
 
     def extract(self, df: pd.DataFrame, output_dir: str) -> pd.DataFrame:
         """Extract latent actions from dataset."""
@@ -395,12 +415,12 @@ class LatentActionExtractor:
             if self.config.mode == "video":
                 transformed_batch = []
                 for video_frames in batch_data:
-                    t_frames = torch.stack(self.model.transform(video_frames), dim=0)
+                    t_frames = torch.stack(self.transform(video_frames), dim=0)
                     transformed_batch.append(t_frames.to("cuda", non_blocking=True))
                 clips_batch = [[torch.stack(transformed_batch, dim=0).squeeze(1)]]
                 clip_indices_batch = batch_rel_indices.to("cuda")
             else:
-                clips_batch = [[torch.stack([self.model.transform(clip)[0] for clip in batch_data], dim=0).to("cuda", non_blocking=True)]]
+                clips_batch = [[torch.stack([self.transform(clip)[0] for clip in batch_data], dim=0).to("cuda", non_blocking=True)]]
                 clip_indices_batch = torch.tensor([0, self.config.stride], device="cuda").unsqueeze(0).repeat(len(batch_data), 1)
 
             batch_tokens = self.model(clips_batch, clip_indices_batch)[0].cpu().numpy()
@@ -509,10 +529,11 @@ def extract_latent_actions(
     if 'la_path' not in full_df.columns:
         full_df['la_path'] = ""
 
-    # Partition data if needed
+    # Partition data if needed. Avoid np.array_split on DataFrames here because
+    # some NumPy/Pandas combinations can yield ndarray partitions.
     if num_partitions > 1:
-        partitions = np.array_split(full_df, num_partitions)
-        current_df = partitions[partition].copy()
+        partition_indices = np.array_split(np.arange(len(full_df)), num_partitions)
+        current_df = full_df.iloc[partition_indices[partition]].copy()
     else:
         current_df = full_df.copy()
 

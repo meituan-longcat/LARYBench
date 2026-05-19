@@ -104,6 +104,11 @@ class MonitoredDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.dataset)
 
+    def __getattr__(self, name):
+        if name == "dataset":
+            raise AttributeError(name)
+        return getattr(self.dataset, name)
+
     def _elapsed_log_time(self):
         if self._last_log_time is None:
             return float("inf")

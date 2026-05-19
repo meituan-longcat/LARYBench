@@ -38,6 +38,8 @@ def init_data(
     persistent_workers=False,
     deterministic=True,
     log_dir=None,
+    timeout=0,
+    error_log_dir=None,
 ):
     if data.lower() == "imagenet":
         from classification.src.datasets.imagenet1k import make_imagenet1k
@@ -85,6 +87,7 @@ def init_data(
             rank=rank,
             deterministic=deterministic,
             log_dir=log_dir,
+            timeout=timeout,
         )
     elif data.lower() == "latentactionvideodataset":
         from classification.src.datasets.video_dataset import make_latentactionvideodataset
@@ -113,5 +116,7 @@ def init_data(
             rank=rank,
             deterministic=deterministic,
             log_dir=log_dir,
+            timeout=timeout,
+            error_log_dir=error_log_dir,
         )
     return (data_loader, dist_sampler)

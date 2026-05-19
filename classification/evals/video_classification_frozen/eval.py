@@ -234,6 +234,9 @@ def run_epoch(
 
     top1_meters = [AverageMeter() for _ in model_list]
     loss_meters = [AverageMeter() for _ in model_list]
+    correct_sums = [0.0 for _ in model_list]
+    loss_sums = [0.0 for _ in model_list]
+    sample_sums = [0 for _ in model_list]
     
     # Storage for evaluation
     all_preds_per_model = [[] for _ in model_list]
@@ -254,9 +257,9 @@ def run_epoch(
             for s_group in schedulers:
                 for s in s_group: s.step()
 
-        # Forward
-        # context = torch.cuda.amp.autocast(dtype=torch.float16, enabled=use_bfloat16)
-        context = torch.cuda.amp.autocast(dtype=torch.float16, enabled=(use_bfloat16 and training))
+        # Forward. The config flag is named use_bfloat16, so use bf16 rather
+        # than fp16; fp16 can overflow easily on large flattened LA features.
+        context = torch.amp.autocast("cuda", dtype=torch.bfloat16, enabled=(use_bfloat16 and training))
 
         # if not training:
         #     context = torch.inference_mode() # Combine with autocast if needed, or separate
@@ -268,18 +271,39 @@ def run_epoch(
             # if training:
             losses = [[criterion(o, labels) for o in out_group] for out_group in outputs]
 
+        finite_flags = torch.tensor(
+            [
+                all(torch.isfinite(loss).item() for loss in loss_group)
+                and all(torch.isfinite(output).all().item() for output in output_group)
+                for loss_group, output_group in zip(losses, outputs)
+            ],
+            dtype=torch.float32,
+            device=device,
+        )
+        if dist.is_available() and dist.is_initialized() and dist.get_world_size() > 1:
+            dist.all_reduce(finite_flags, op=dist.ReduceOp.MIN)
+        finite_flags = finite_flags.bool().tolist()
+        if not all(finite_flags):
+            bad_heads = [idx for idx, is_finite in enumerate(finite_flags) if not is_finite]
+            logger.warning(f"Skipping non-finite classifier heads at iter {i}: {bad_heads}")
+
         # Metrics & Logging
         with torch.no_grad():
             # Average softmax outputs across heads if multiple exist within one model wrapper
             outputs_softmax = [sum([F.softmax(o, dim=1) for o in out_group]) / len(out_group) for out_group in outputs]
             
             for idx, (out_sm, meter, loss_group, l_meter) in enumerate(zip(outputs_softmax, top1_meters, losses, loss_meters)):
-                acc = 100.0 * out_sm.max(dim=1).indices.eq(labels).sum() / batch_size
-                meter.update(float(AllReduce.apply(acc)))
-                
+                if not finite_flags[idx]:
+                    continue
+                correct = float(out_sm.max(dim=1).indices.eq(labels).sum().item())
                 avg_loss_val = sum([l.item() for l in loss_group]) / len(loss_group)
-                # 使用 AllReduce 确保分布式环境下 Loss 记录准确
-                l_meter.update(float(AllReduce.apply(torch.tensor(avg_loss_val, device=device))))
+                correct_sums[idx] += correct
+                loss_sums[idx] += avg_loss_val * batch_size
+                sample_sums[idx] += batch_size
+
+                local_acc = 100.0 * correct / batch_size
+                meter.update(local_acc, batch_size)
+                l_meter.update(avg_loss_val, batch_size)
 
                 if collect_preds:
                     all_preds_per_model[idx].extend(out_sm.max(dim=1).indices.cpu().numpy().tolist())
@@ -289,22 +313,27 @@ def run_epoch(
                     all_labels.extend(labels.cpu().numpy().tolist())
                     all_samples.extend(indices)
 
-        # Backward
+        # Backward. bf16 does not use GradScaler, but keep per-head scaler
+        # support for older fp16 checkpoints/configs.
         if training:
-            if use_bfloat16 and scaler:
-                for s, loss_group, opt in zip(scaler, losses, optimizer):
+            for idx, (loss_group, opt) in enumerate(zip(losses, optimizer)):
+                if not finite_flags[idx]:
+                    opt.zero_grad(set_to_none=True)
+                    continue
+
+                head_scaler = scaler[idx] if scaler and idx < len(scaler) else None
+                if head_scaler is not None:
                     for loss in loss_group:
-                        s.scale(loss).backward()
-                    s.step(opt)
-                    s.update()
-            else:
-                for loss_group, opt in zip(losses, optimizer):
+                        head_scaler.scale(loss).backward()
+                    head_scaler.step(opt)
+                    head_scaler.update()
+                else:
                     for loss in loss_group:
                         loss.backward()
                     opt.step()
             
             for opt in optimizer:
-                opt.zero_grad()
+                opt.zero_grad(set_to_none=True)
 
         # Periodic Logging
         if i % 10 == 0:
@@ -312,6 +341,19 @@ def run_epoch(
             agg_loss = np.array([m.avg for m in loss_meters])
             logger.info(f"[{i:5d}] Max Acc: {agg_acc.max():.3f}% | Min Loss: {agg_loss.min():.4f} | Mem: {torch.cuda.max_memory_allocated()/1024**2:.0f}MB")
     
+    if dist.is_available() and dist.is_initialized() and dist.get_world_size() > 1:
+        for idx in range(len(model_list)):
+            stats = torch.tensor(
+                [correct_sums[idx], loss_sums[idx], float(sample_sums[idx])],
+                dtype=torch.float64,
+                device=device,
+            )
+            dist.all_reduce(stats)
+            total_correct, total_loss, total_samples = stats.tolist()
+            if total_samples > 0:
+                top1_meters[idx].avg = 100.0 * total_correct / total_samples
+                loss_meters[idx].avg = total_loss / total_samples
+
     # Return results
     best_idx = np.argmax([m.avg for m in top1_meters])
     max_acc = top1_meters[best_idx].avg
@@ -388,6 +430,9 @@ def make_dataloader(
     subset_file=None,
     normalization=None,
     persistent_workers=True,
+    timeout=0,
+    log_dir=None,
+    error_log_dir=None,
 ):
     if normalization is None:
         normalization = DEFAULT_NORMALIZATION
@@ -422,6 +467,9 @@ def make_dataloader(
         drop_last=False,
         subset_file=subset_file,
         persistent_workers=persistent_workers,
+        timeout=timeout,
+        log_dir=log_dir,
+        error_log_dir=error_log_dir,
     )
     return data_loader, data_sampler
 
@@ -489,8 +537,10 @@ def main(args_eval, resume_preempt=False):
         world_size=world_size,
         rank=rank,
         num_workers=args_eval.get("num_workers", 8),
+        timeout=args_eval.get("loader_timeout", 0),
         normalization=data_cfg.get("normalization", ((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))),
-        persistent_workers=True
+        persistent_workers=True,
+        error_log_dir=folder,
     )
 
     train_loader, train_sampler = make_dataloader(
@@ -526,7 +576,8 @@ def main(args_eval, resume_preempt=False):
         }]
         opt = torch.optim.AdamW(p_groups)
         optimizers.append(opt)
-        scalers.append(torch.cuda.amp.GradScaler() if use_bf16 else None)
+        # bf16 has a large exponent range and does not need GradScaler.
+        scalers.append(None)
         lr_schedulers.append(WarmupCosineLRSchedule(opt, T_max=int(num_epochs * ipe)))
         wd_schedulers.append(CosineWDSchedule(opt, T_max=int(num_epochs * ipe)))
 
@@ -538,8 +589,10 @@ def main(args_eval, resume_preempt=False):
         start_epoch = ckpt["epoch"]
         for c, sd in zip(classifiers, ckpt["classifiers"]): c.load_state_dict(sd)
         for o, sd in zip(optimizers, ckpt["opt"]): o.load_state_dict(sd)
-        if ckpt["scaler"]: 
-            for s, sd in zip(scalers, ckpt["scaler"]): s.load_state_dict(sd)
+        if ckpt.get("scaler"):
+            for s, sd in zip(scalers, ckpt["scaler"]):
+                if s is not None:
+                    s.load_state_dict(sd)
         
         # Fast-forward schedulers
         for _ in range(start_epoch * ipe):
@@ -609,7 +662,7 @@ def main(args_eval, resume_preempt=False):
             torch.save({
                 "classifiers": [c.state_dict() for c in classifiers],
                 "opt": [o.state_dict() for o in optimizers],
-                "scaler": [s.state_dict() for s in scalers] if scalers[0] else None,
+                "scaler": [s.state_dict() for s in scalers] if any(s is not None for s in scalers) else None,
                 "epoch": epoch + 1,
             }, ckpt_path)
 
@@ -626,4 +679,3 @@ def main(args_eval, resume_preempt=False):
             return
 
     if rank == 0: wandb.finish() # <--- 修改：结束 wandb
-

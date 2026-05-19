@@ -8,6 +8,7 @@ Usage:
 """
 
 import argparse
+import csv
 import os
 import sys
 from pathlib import Path
@@ -78,8 +79,16 @@ Examples:
                                  help="Path to config file (YAML)")
     classify_parser.add_argument("--batch-size", type=int, default=256,
                                  help="Batch size")
+    classify_parser.add_argument("--num-workers", type=int, default=8,
+                                 help="Number of DataLoader workers per GPU")
+    classify_parser.add_argument("--loader-timeout", type=int, default=0,
+                                 help="DataLoader timeout in seconds. Use >0 to fail fast on stuck NAS reads.")
     classify_parser.add_argument("--gpus", type=str, default="0,1,2,3,4,5,6,7",
                                  help="Comma-separated GPU IDs")
+    classify_parser.add_argument("--master-port", type=int, default=None,
+                                 help="MASTER_PORT for distributed classification. Defaults to an unused local port.")
+    classify_parser.add_argument("--skip-preflight", action="store_true",
+                                 help="Skip classification latent-action path checks before launching DDP.")
 
     # ===== Regression command =====
     regress_parser = subparsers.add_parser("regress", help="Run regression evaluation")
@@ -251,11 +260,79 @@ def run_extract(args) -> None:
 def run_classify(args) -> None:
     """Run classification evaluation."""
     import os
+    import socket
     import subprocess
     import sys
 
-    # Set MASTER_PORT for distributed training
-    os.environ["MASTER_PORT"] = os.environ.get("MASTER_PORT", "11325")
+    def preflight_latent_actions(csv_paths, max_checks=64):
+        from lary.path_resolver import resolve_la_path
+
+        la_root = os.environ.get("LARY_LA_DIR", "")
+        failures = []
+        checked = 0
+        for csv_path in csv_paths:
+            if not os.path.exists(csv_path):
+                failures.append(f"CSV not found: {csv_path}")
+                continue
+
+            with open(csv_path, newline="") as f:
+                reader = csv.DictReader(f)
+                if "la_path" not in (reader.fieldnames or []):
+                    failures.append(f"CSV has no la_path column: {csv_path}")
+                    continue
+
+                local_checks = 0
+                empty_paths = 0
+                for row_idx, row in enumerate(reader, start=2):
+                    raw_path = (row.get("la_path") or "").strip()
+                    if not raw_path or raw_path.lower() == "nan":
+                        empty_paths += 1
+                        continue
+                    resolved = resolve_la_path(raw_path, args.dataset, "all", args.model)
+                    if not os.path.exists(resolved):
+                        failures.append(
+                            f"Missing latent action: csv={csv_path} line={row_idx} "
+                            f"la_path={raw_path} resolved={resolved}"
+                        )
+                        if len(failures) >= 10:
+                            break
+                    checked += 1
+                    local_checks += 1
+                    if local_checks >= max_checks:
+                        break
+
+                if empty_paths:
+                    print(f"[lary classify] Warning: {csv_path} has {empty_paths} empty la_path rows in scanned prefix.", flush=True)
+
+            if len(failures) >= 10:
+                break
+
+        if failures:
+            message = "\n".join(failures)
+            raise FileNotFoundError(
+                "Classification preflight failed before launching DDP.\n"
+                f"LARY_LA_DIR={la_root}\n"
+                f"Checked up to {max_checks} non-empty la_path rows per CSV.\n"
+                f"{message}\n"
+                "Set LARY_LA_DIR to the latent-action root used by extract, or rerun extract for this model/dataset."
+            )
+
+        print(
+            f"[lary classify] Preflight OK: checked {checked} latent-action paths under LARY_LA_DIR={la_root}",
+            flush=True,
+        )
+
+    def find_free_port(start=11325, end=11425):
+        for port in range(start, end):
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                if s.connect_ex(("127.0.0.1", port)) != 0:
+                    return port
+        return start
+
+    env = os.environ.copy()
+    env["MASTER_ADDR"] = "127.0.0.1"
+    env["MASTER_PORT"] = str(args.master_port if args.master_port is not None else find_free_port())
+    print(f"[lary classify] MASTER_PORT={env['MASTER_PORT']}", flush=True)
 
     # Get config file
     config_file = args.config
@@ -267,6 +344,12 @@ def run_classify(args) -> None:
     # Build devices list
     devices = [f"cuda:{g}" for g in args.gpus.split(",")]
 
+    project_root = Path(__file__).resolve().parents[1]
+    train_csv = str(project_root / "data" / f"train_la_{args.dataset}_{args.model}.csv")
+    val_csv = str(project_root / "data" / f"val_la_{args.dataset}_{args.model}.csv")
+    if not args.skip_preflight:
+        preflight_latent_actions([train_csv, val_csv])
+
     cmd = [
         sys.executable, "-m", "classification.evals.main",
         "--fname", config_file,
@@ -275,10 +358,12 @@ def run_classify(args) -> None:
         "--dim", str(args.dim),
         "--classes", str(args.classes),
         "--batch_size", str(args.batch_size),
+        "--num_workers", str(args.num_workers),
+        "--loader_timeout", str(args.loader_timeout),
         "--devices", *devices,
     ]
 
-    subprocess.run(cmd)
+    subprocess.run(cmd, env=env, check=True)
 
 
 # Datasets that use seen_train / seen_val / unseen splits instead of train / val,

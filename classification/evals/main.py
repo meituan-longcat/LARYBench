@@ -7,6 +7,8 @@ import argparse
 import multiprocessing as mp
 import os
 import pprint
+import sys
+import time
 
 import yaml
 
@@ -44,6 +46,8 @@ parser.add_argument("--override_config_folder", action="store_true")
 parser.add_argument("--checkpoint", type=str, help="location of pretrained ckpt")
 parser.add_argument("--model_name", type=str, help="Model name")
 parser.add_argument("--batch_size", type=int)
+parser.add_argument("--num_workers", type=int)
+parser.add_argument("--loader_timeout", type=int)
 parser.add_argument("--use_fsdp", action="store_true")
 
 parser.add_argument("--lam", type=str, help="latent action model name", default="lapa")
@@ -81,6 +85,12 @@ def process_main(args, rank, fname, world_size, devices):
 
         if args.batch_size:
             params["experiment"]["optimization"]["batch_size"] = args.batch_size
+
+        if args.num_workers is not None:
+            params["num_workers"] = args.num_workers
+
+        if args.loader_timeout is not None:
+            params["loader_timeout"] = args.loader_timeout
 
         if args.override_config_folder:
             params["folder"] = args.folder
@@ -134,5 +144,36 @@ if __name__ == "__main__":
     else:
         num_gpus = len(args.devices)
         mp.set_start_method("spawn")
+        processes = []
         for rank in range(num_gpus):
-            mp.Process(target=process_main, args=(args, rank, args.fname, num_gpus, args.devices)).start()
+            process = mp.Process(target=process_main, args=(args, rank, args.fname, num_gpus, args.devices))
+            process.start()
+            processes.append(process)
+
+        exit_code = 0
+        while processes:
+            alive = []
+            for process in processes:
+                process.join(timeout=0)
+                if process.exitcode is None:
+                    alive.append(process)
+                    continue
+                if process.exitcode != 0 and exit_code == 0:
+                    exit_code = process.exitcode or 1
+
+            if exit_code != 0:
+                for process in alive:
+                    process.terminate()
+                for process in alive:
+                    process.join(timeout=10)
+                    if process.exitcode is None:
+                        process.kill()
+                        process.join()
+                break
+
+            processes = alive
+            if processes:
+                time.sleep(1)
+
+        if exit_code != 0:
+            sys.exit(exit_code)
