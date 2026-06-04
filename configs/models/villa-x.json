@@ -1,0 +1,5 @@
+{
+  "type": "VillaXLaryWrap",
+  "name": "villa-x",
+  "ckpt_path": "/mnt/hdfs/zw04mlnn01/checkpoint/llm_platform/model/microsoft/villa-x/main/lam"
+}
