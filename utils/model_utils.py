@@ -63,3 +63,17 @@ def print_model_params(model):
     table.align["Trainable %"] = "r"
 
     print(f"\n{table}\n")
+
+
+def disabled_train(self, mode=True):
+    """Overwrite model.train with this function to make sure train/eval mode
+    does not change anymore."""
+    return self
+
+
+def freeze_backbone(backbone):
+    for p in backbone.parameters():
+        if hasattr(p, "requires_grad") and p.requires_grad is not None:
+            p.requires_grad = False
+    backbone = backbone.eval()
+    backbone.train = disabled_train
