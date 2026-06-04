@@ -518,7 +518,7 @@ class Vjepa2LaryWrap(LaryBaseModel):
         return global_idx, selected_frames, rel_indices
 
 
-@MODEL.register_module
+@MODEL.register_module()
 class Dinov2OriginLaryWrap(LaryBaseModel):
     def __init__(self, *args, **kwargs):
         super().__init__()
@@ -584,7 +584,7 @@ class Dinov2OriginLaryWrap(LaryBaseModel):
         return global_idx, tensor, rel_indices
 
 
-@MODEL.register_module
+@MODEL.register_module()
 class Dinov3OriginLaryWrap(LaryBaseModel):
     def __init__(self, *args, **kwargs):
         super().__init__()
@@ -650,7 +650,7 @@ class Dinov3OriginLaryWrap(LaryBaseModel):
         return global_idx, tensor, rel_indices
 
 
-@MODEL.register_module
+@MODEL.register_module()
 class Siglip2OriginLaryWrap(LaryBaseModel):
     def __init__(self, *args, **kwargs):
         super().__init__()
