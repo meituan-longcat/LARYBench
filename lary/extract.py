@@ -40,44 +40,6 @@ def setup_seed(seed: int = 42):
     os.environ['PYTHONHASHSEED'] = str(seed)
 
 
-def load_video_frames(video_path: str) -> List[np.ndarray]:
-    """Load all frames from a video file."""
-    cap = cv2.VideoCapture(video_path)
-    frames = []
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
-        frames.append(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-    cap.release()
-    return frames
-
-
-def read_video_tensor(fp: str, resize_h: int = None, resize_w: int = None):
-    """
-    Read video and return as tensor.
-
-    Args:
-        fp: Video file path
-        resize_h, resize_w: Target dimensions (optional)
-
-    Returns:
-        video: Tensor of shape (T, H, W, C)
-        fps: Frames per second
-    """
-    from torchvision.io import read_video
-
-    video, _, info = read_video(fp, pts_unit="sec")
-    fps = int(info.get("video_fps", 25.0))
-
-    if resize_h is not None and resize_w is not None:
-        video = video.permute(0, 3, 1, 2)
-        video = F.resize(video, [resize_h, resize_w], antialias=True)
-        video = video.permute(0, 2, 3, 1)
-
-    return video, fps
-
-
 class VideoActionDataset(Dataset):
     """Dataset for video-based latent action extraction."""
 
@@ -220,26 +182,6 @@ class LatentActionExtractor:
     def __init__(self, config: ExtractionConfig):
         self.config = config
         self.model = MODEL.build(self.config.model)
-        self._setup_transform()
-
-    def _setup_transform(self):
-        """Initialize model-specific preprocessing used outside DataLoader workers."""
-        self.transform = None
-        if self.config.model == 'vjepa2':
-            from get_latent_action.models.vjepa2.evals.video_classification_frozen.utils import make_transforms
-
-            self.transform = make_transforms(
-                training=False,
-                num_views_per_clip=1,
-                random_horizontal_flip=False,
-                random_resize_aspect_ratio=(1.0, 1.0),
-                random_resize_scale=(1.0, 1.0),
-                reprob=0,
-                auto_augment=False,
-                motion_shift=False,
-                crop_size=224,
-                normalize=((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
-            )
 
     def extract(self, df: pd.DataFrame, output_dir: str) -> pd.DataFrame:
         """Extract latent actions from dataset."""

@@ -1,31 +1,14 @@
 import os
 from abc import ABC, abstractmethod
-from typing import List
 import cv2
 from PIL import Image
 import numpy as np
 import pandas as pd
 import torch
-from torch import nn
 import torchvision.transforms.functional as F
-from torchvision.io import read_video
 
 from registry import MODEL
-
-from utils.model_utils import print_model_params, freeze_backbone
-from get_latent_action.models.laq_model import (LatentActionQuantization,
-                                                LatentActionQuantizationDinov2Feature,
-                                                LatentActionQuantizationDinov3Feature,
-                                                LatentActionQuantizationSiglipv2Feature,
-                                                LatentActionQuantizationMagvit2)
-from get_latent_action.models.univla.genie.model import ControllableDINOLatentActionModel
-from get_latent_action.models.villa_x.lam.model import IgorModel
-from get_latent_action.models.flux2.src.flux2.util import load_ae
-from get_latent_action.models.flux2.src.flux2.sampling import encode_video_batch_refs_final
-from get_latent_action.models.wan2_2.wan.modules.vae2_2 import Wan2_2_VAE # 只是适配wan
-from get_latent_action.tokenizer import (get_dinov3_tokenizer, get_dino_tokenizer, get_siglip2_tokenizer,
-                                         get_dinov3_reps, get_dino_reps, get_siglip2_reps)
-from get_latent_action.models.vjepa2.evals.video_classification_frozen.models import init_module
+from get_latent_action.utils import print_model_params, freeze_backbone, load_video_frames, read_video_tensor
 
 
 class LaryBaseModel(ABC):
@@ -50,19 +33,6 @@ class LaryBaseModel(ABC):
         pass
 
 
-def load_video_frames(video_path: str) -> List[np.ndarray]:
-    """Load all frames from a video file."""
-    cap = cv2.VideoCapture(video_path)
-    frames = []
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
-        frames.append(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-    cap.release()
-    return frames
-
-
 class LaqBaseModel(LaryBaseModel):
     def __init__(self, *args, **kwargs):
         super().__init__()
@@ -82,7 +52,6 @@ class LaqBaseModel(LaryBaseModel):
             B, P, C, T, H, W = batch_data.shape
             flat_input = batch_data.view(B * P, C, T, H, W).to("cuda")
             flat_tokens, flat_ids = self._get_latent_action(flat_input)
-            # flat_tokens: (B*P, N, D)  flat_ids: (B*P, N)
             batch_tokens = flat_tokens.reshape(B, P, flat_tokens.shape[-2], flat_tokens.shape[-1])
             batch_ids = flat_ids.reshape(B, P, -1)
         else:
@@ -138,6 +107,7 @@ class LaqBaseModel(LaryBaseModel):
 class LAPALaryWrap(LaqBaseModel):
     def __init__(self, *args, **kwargs):
         super().__init__()
+        from get_latent_action.models.laq_model import LatentActionQuantization
         self.name = kwargs.pop("name", "lapa")
         ckpt_path = kwargs.pop("ckpt_path", None)
         self.model = LatentActionQuantization(*args, **kwargs)
@@ -150,6 +120,7 @@ class LAPALaryWrap(LaqBaseModel):
 class Magvit2LaryWrap(LaqBaseModel):
     def __init__(self, *args, **kwargs):
         super().__init__()
+        from get_latent_action.models.laq_model import LatentActionQuantizationMagvit2
         self.name = kwargs.pop("name", "magvit2")
         ckpt_path = kwargs.pop("ckpt_path", None)
         self.model = LatentActionQuantizationMagvit2(*args, **kwargs)
@@ -162,6 +133,7 @@ class Magvit2LaryWrap(LaqBaseModel):
 class Dinov2LaryWrap(LaqBaseModel):
     def __init__(self, *args, **kwargs):
         super().__init__()
+        from get_latent_action.models.laq_model import LatentActionQuantizationDinov2Feature
         self.name = kwargs.pop("name", "dinov2")
         ckpt_path = kwargs.pop("ckpt_path", None)
         self.model = LatentActionQuantizationDinov2Feature(*args, **kwargs)
@@ -174,6 +146,7 @@ class Dinov2LaryWrap(LaqBaseModel):
 class Dinov3LaryWrap(LaqBaseModel):
     def __init__(self, *args, **kwargs):
         super().__init__()
+        from get_latent_action.models.laq_model import LatentActionQuantizationDinov3Feature
         self.name = kwargs.pop("name", "dinov3")
         ckpt_path = kwargs.pop("ckpt_path", None)
         self.model = LatentActionQuantizationDinov3Feature(*args, **kwargs)
@@ -186,6 +159,7 @@ class Dinov3LaryWrap(LaqBaseModel):
 class Siglip2LaryWrap(LaqBaseModel):
     def __init__(self, *args, **kwargs):
         super().__init__()
+        from get_latent_action.models.laq_model import LatentActionQuantizationSiglipv2Feature
         self.name = kwargs.pop("name", "siglip2")
         ckpt_path = kwargs.pop("ckpt_path", None)
         self.model = LatentActionQuantizationSiglipv2Feature(*args, **kwargs)
@@ -198,6 +172,7 @@ class Siglip2LaryWrap(LaqBaseModel):
 class UnivlaLaryWrap(LaqBaseModel):
     def __init__(self, *args, **kwargs):
         super().__init__()
+        from get_latent_action.models.univla.genie.model import ControllableDINOLatentActionModel
         self.name = kwargs.pop("name", "univla")
         ckpt_path = kwargs.pop("ckpt_path", None)
         self.model = ControllableDINOLatentActionModel(*args, **kwargs)
@@ -209,34 +184,12 @@ class UnivlaLaryWrap(LaqBaseModel):
         self.prepare_model_for_extraction()
 
 
-def read_video_tensor(fp: str, resize_h: int = None, resize_w: int = None):
-    """
-    Read video and return as tensor.
-
-    Args:
-        fp: Video file path
-        resize_h, resize_w: Target dimensions (optional)
-
-    Returns:
-        video: Tensor of shape (T, H, W, C)
-        fps: Frames per second
-    """
-    video, _, info = read_video(fp, pts_unit="sec")
-    fps = int(info.get("video_fps", 25.0))
-
-    if resize_h is not None and resize_w is not None:
-        video = video.permute(0, 3, 1, 2)
-        video = F.resize(video, [resize_h, resize_w], antialias=True)
-        video = video.permute(0, 2, 3, 1)
-
-    return video, fps
-
-
 #villa-x
 @MODEL.register_module()
 class VillaXLaryWrap(LaryBaseModel):
     def __init__(self, *args, **kwargs):
         super().__init__()
+        from get_latent_action.models.villa_x.lam.model import IgorModel
         self.name = kwargs.pop("name", "villa-x")
         ckpt_path = kwargs.pop("ckpt_path", None)
         self.model = IgorModel.from_pretrained(ckpt_path).cuda()
@@ -301,11 +254,14 @@ class VillaXLaryWrap(LaryBaseModel):
 class Flux2LaryWrap(LaryBaseModel):
     def __init__(self, *args, **kwargs):
         super().__init__()
+        from get_latent_action.models.flux2.src.flux2.util import load_ae
+
         self.name = kwargs.pop("name", "flux2")
         self.model = load_ae("flux.2-dev", device="cuda")
         self.prepare_model_for_extraction()
 
     def get_latent_action(self, batch_data, batch_rel_indices=None, config=None):
+        from get_latent_action.models.flux2.src.flux2.sampling import encode_video_batch_refs_final
         with torch.no_grad():
             batch_tokens = encode_video_batch_refs_final(self.model, batch_data)  # x Image列表 tokens: 1, num_frames*N, D
             batch_tokens = batch_tokens.cpu().numpy()
@@ -363,6 +319,7 @@ class Flux2LaryWrap(LaryBaseModel):
 class Wan2_2LaryWrap(LaryBaseModel):
     def __init__(self, *args, **kwargs):
         super().__init__()
+        from get_latent_action.models.wan2_2.wan.modules.vae2_2 import Wan2_2_VAE
         self.name = kwargs.pop("name", "wan2-2")
         ckpt_path = kwargs.pop("ckpt_path", None)
         self.model = Wan2_2_VAE(vae_pth=ckpt_path, device="cuda")
@@ -435,6 +392,7 @@ class Wan2_2LaryWrap(LaryBaseModel):
 class Vjepa2LaryWrap(LaryBaseModel):
     def __init__(self, *args, **kwargs):
         super().__init__()
+        from get_latent_action.models.vjepa2.evals.video_classification_frozen.models import init_module
         self.name = kwargs.pop("name", "vjepa2")
         args_model = {
             "encoder": {
@@ -463,17 +421,31 @@ class Vjepa2LaryWrap(LaryBaseModel):
             device="cuda",
         )
 
+        from get_latent_action.models.vjepa2.evals.video_classification_frozen.utils import make_transforms
+        self.transform = make_transforms(
+            training=False,
+            num_views_per_clip=1,
+            random_horizontal_flip=False,
+            random_resize_aspect_ratio=(1.0, 1.0),
+            random_resize_scale=(1.0, 1.0),
+            reprob=0,
+            auto_augment=False,
+            motion_shift=False,
+            crop_size=224,
+            normalize=((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+        )
+
     def get_latent_action(self, batch_data, batch_rel_indices=None, config=None):
         with torch.no_grad():
             if config.mode == "video":
                 transformed_batch = []
                 for video_frames in batch_data:
-                    t_frames = torch.stack(self.model.transform(video_frames), dim=0)
+                    t_frames = torch.stack(self.transform(video_frames), dim=0)
                     transformed_batch.append(t_frames.to("cuda", non_blocking=True))
                 clips_batch = [[torch.stack(transformed_batch, dim=0).squeeze(1)]]
                 clip_indices_batch = batch_rel_indices.to("cuda")
             else:
-                clips_batch = [[torch.stack([self.model.transform(clip)[0] for clip in batch_data], dim=0).to("cuda",
+                clips_batch = [[torch.stack([self.transform(clip)[0] for clip in batch_data], dim=0).to("cuda",
                                                                                                               non_blocking=True)]]
                 clip_indices_batch = torch.tensor([0, config.stride], device="cuda").unsqueeze(0).repeat(
                     len(batch_data), 1)
@@ -522,11 +494,13 @@ class Vjepa2LaryWrap(LaryBaseModel):
 class Dinov2OriginLaryWrap(LaryBaseModel):
     def __init__(self, *args, **kwargs):
         super().__init__()
+        from get_latent_action.tokenizer import get_dino_tokenizer
         self.name = kwargs.pop("name", "dinov2-origin")
         self.model = get_dino_tokenizer()
         self.prepare_model_for_extraction()
 
     def get_latent_action(self, batch_data, batch_rel_indices=None, config=None):
+        from get_latent_action.tokenizer import get_dino_reps
         with torch.no_grad():
             batch_input = batch_data.to("cuda")
             b, c, f, h, w = batch_input.shape
@@ -588,11 +562,13 @@ class Dinov2OriginLaryWrap(LaryBaseModel):
 class Dinov3OriginLaryWrap(LaryBaseModel):
     def __init__(self, *args, **kwargs):
         super().__init__()
+        from get_latent_action.tokenizer import get_dinov3_tokenizer
         self.name = kwargs.pop('name', 'dinov3-origin')
         self.model = get_dinov3_tokenizer()
         self.prepare_model_for_extraction()
 
     def get_latent_action(self, batch_data, batch_rel_indices=None, config=None):
+        from get_latent_action.tokenizer import get_dinov3_reps
         with torch.no_grad():
             batch_input = batch_data.to("cuda")
             b, c, f, h, w = batch_input.shape
@@ -654,11 +630,13 @@ class Dinov3OriginLaryWrap(LaryBaseModel):
 class Siglip2OriginLaryWrap(LaryBaseModel):
     def __init__(self, *args, **kwargs):
         super().__init__()
+        from get_latent_action.tokenizer import get_siglip2_tokenizer
         self.name = kwargs.pop('name', 'siglip2-origin')
         self.model = get_siglip2_tokenizer()
         self.prepare_model_for_extraction()
 
     def get_latent_action(self, batch_data, batch_rel_indices=None, config=None):
+        from get_latent_action.tokenizer import get_siglip2_reps
         with torch.no_grad():
             batch_input = batch_data.to("cuda")
             b, c, f, h, w = batch_input.shape
