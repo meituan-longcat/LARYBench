@@ -23,6 +23,7 @@ import torchvision.transforms.functional as F
 from lary.config import get_config
 from lary.path_resolver import resolve_data_path
 from registry.registry import MODEL
+import get_latent_action.models
 
 
 # =============================================================================
@@ -210,7 +211,7 @@ class LatentActionExtractor:
                 if self.config.mode == "video":
                     batch_rel_indices = batch[2]
 
-                batch_tokens, batch_ids = self.model.get_latent_action(batch_data, batch_rel_indices if self.config.mode == "video" else None, self.config.mode)
+                batch_tokens, batch_ids = self.model.get_latent_action(batch_data, batch_rel_indices if self.config.mode == "video" else None, self.config)
 
                 for i, global_idx in enumerate(batch_indices):
                     save_name = f"latent_action_{global_idx:08d}.npz"

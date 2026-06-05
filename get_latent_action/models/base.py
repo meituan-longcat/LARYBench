@@ -90,7 +90,7 @@ class LaqBaseModel(LaryBaseModel):
         selected_frames = []
         for f_idx in indices:
             safe_idx = max(0, min(int(f_idx), total_frames - 1))
-            img = cv2.resize(all_frames[safe_idx], (self.image_size, self.image_size),
+            img = cv2.resize(all_frames[safe_idx], (image_size, image_size),
                              interpolation=cv2.INTER_CUBIC)
             selected_frames.append(img / 255.0)
 
@@ -183,6 +183,13 @@ class UnivlaLaryWrap(LaqBaseModel):
         )
         self.prepare_model_for_extraction()
 
+    def _get_latent_action(self, batch_input):
+        with torch.no_grad():
+            outputs = self.model.vq_encode(batch_input.permute(0, 2, 1, 3, 4))
+            indices = outputs['indices']
+            tokens = outputs['z_q'].squeeze(1)
+        return tokens.cpu().numpy(), indices.cpu().numpy()
+
 
 #villa-x
 @MODEL.register_module()
@@ -212,13 +219,13 @@ class VillaXLaryWrap(LaryBaseModel):
         freeze_backbone(self.model)
         self.model.to('cuda').eval()
 
-    def _load_image(self, path):
+    def _load_image(self, path, image_size):
         img = Image.open(path).convert('RGB')
-        return np.array(img.resize((self.image_size, self.image_size), Image.LANCZOS))
+        return np.array(img.resize((image_size, image_size), Image.LANCZOS))
 
     def process_image(self, src_img_path, tgt_img_path, image_size):
-        src_img = self._load_image(src_img_path)
-        tgt_img = self._load_image(tgt_img_path)
+        src_img = self._load_image(src_img_path, image_size)
+        tgt_img = self._load_image(tgt_img_path, image_size)
         tensor = torch.tensor(np.array([src_img, tgt_img]), dtype=torch.uint8)
         return tensor
 
@@ -277,13 +284,13 @@ class Flux2LaryWrap(LaryBaseModel):
         freeze_backbone(self.model)
         self.model.to("cuda").eval()
 
-    def _load_image(self, path):
+    def _load_image(self, path, image_size):
         img = Image.open(path).convert('RGB')
-        return np.array(img.resize((self.image_size, self.image_size), Image.LANCZOS))
+        return np.array(img.resize((image_size, image_size), Image.LANCZOS))
 
     def process_image(self, src_img_path, tgt_img_path, image_size):
-        src_img = self._load_image(src_img_path)
-        tgt_img = self._load_image(tgt_img_path)
+        src_img = self._load_image(src_img_path, image_size)
+        tgt_img = self._load_image(tgt_img_path, image_size)
         tensor = torch.tensor(np.stack([src_img, tgt_img]), dtype=torch.float32) * 2 - 1
         return tensor
 
@@ -305,7 +312,7 @@ class Flux2LaryWrap(LaryBaseModel):
         selected_frames = []
         for f_idx in indices:
             safe_idx = max(0, min(int(f_idx), total_frames - 1))
-            img = cv2.resize(all_frames[safe_idx], (self.image_size, self.image_size),
+            img = cv2.resize(all_frames[safe_idx], (image_size, image_size),
                              interpolation=cv2.INTER_CUBIC)
             selected_frames.append(img / 255.0)
 
@@ -343,14 +350,14 @@ class Wan2_2LaryWrap(LaryBaseModel):
         freeze_backbone(self.model.model)
         self.model.model.to("cuda").eval()
 
-    def _load_image(self, path):
+    def _load_image(self, path, image_size):
         img = Image.open(path).convert('RGB')
-        img = img.resize((self.image_size, self.image_size), Image.LANCZOS)
+        img = img.resize((image_size, image_size), Image.LANCZOS)
         return F.to_tensor(img).sub_(0.5).div_(0.5)
 
     def process_image(self, src_img_path, tgt_img_path, image_size):
-        src_img = self._load_image(src_img_path)
-        tgt_img = self._load_image(tgt_img_path)
+        src_img = self._load_image(src_img_path, image_size)
+        tgt_img = self._load_image(tgt_img_path, image_size)
         tensor = torch.stack([src_img, tgt_img], dim=1)
         return tensor
 
@@ -372,7 +379,7 @@ class Wan2_2LaryWrap(LaryBaseModel):
         selected_frames = []
         for f_idx in indices:
             safe_idx = max(0, min(int(f_idx), total_frames - 1))
-            img = cv2.resize(all_frames[safe_idx], (self.image_size, self.image_size),
+            img = cv2.resize(all_frames[safe_idx], (image_size, image_size),
                              interpolation=cv2.INTER_CUBIC)
             selected_frames.append(img / 255.0)
 
@@ -380,7 +387,7 @@ class Wan2_2LaryWrap(LaryBaseModel):
         for f_idx in indices:
             safe_idx = max(0, min(int(f_idx), total_frames - 1))
             img = Image.fromarray(all_frames[safe_idx])
-            img = img.resize((self.image_size, self.image_size), Image.LANCZOS)
+            img = img.resize((image_size, image_size), Image.LANCZOS)
             tensor = F.to_tensor(img).sub_(0.5).div_(0.5)
             tensors.append(tensor)
         tensor = torch.stack(tensors, dim=1)
