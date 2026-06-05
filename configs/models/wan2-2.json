@@ -1,5 +1,4 @@
 {
   "type": "Wan2_2LaryWrap",
-  "name": "wan2-2",
-  "ckpt_path": "/mnt/hdfs/zw04mlnn01/checkpoint/llm_platform/model/Wan-AI/Wan2.2-TI2V-5B/main/Wan2.2_VAE.pth"
+  "name": "wan2-2"
 }

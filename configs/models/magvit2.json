@@ -11,6 +11,5 @@
   "dim_head": 64,
   "heads": 16,
   "code_seq_len": 16,
-  "model_type": "en18",
-  "ckpt_path": "/mnt/dolphinfs/ssd_pool/docker/user/hadoop-aipnlp/EVA/niuminzhe/larybench_github/larybench-nmz/models/magvit2.pt"
+  "model_type": "en18"
 }

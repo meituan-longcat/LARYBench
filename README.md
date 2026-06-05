@@ -320,32 +320,23 @@ CUDA_VISIBLE_DEVICES=0 python -m lary.cli regress \
 
 LARYBench only needs your model to convert a video or image pair into a numeric `tokens` array saved in each latent-action `.npz` file.
 
-1. Add model-specific imports in [get_latent_action/dynamics.py](get_latent_action/dynamics.py), guarded by `USE_MODEL` if the dependency is optional.
-
+1. Subclass `larybench.get_latent_action.models.base.LaryBaseModel`, implement all required methods for image/video loading, token calculation, etc. Register new model with decorator as follows and don't forget to pre-load it in `get_latent_action/models/__init__.py`
 ```python
-env_model = os.environ.get("USE_MODEL")
-if env_model == "my-model":
-    from my_project import MyModel
+@MODEL.register_module()
+class CustomClass(LaryBaseModel):
+    def __init__(self, name="my-model", param_a, param_b, ...):
 ```
-
-2. Register the model loader in `get_dynamic_tokenizer(model)`.
-
-```python
-elif model == "my-model":
-    dynamics = MyModel.from_pretrained(os.environ["MY_MODEL_CKPT"]).cuda()
+2. Add a config file for new model with the same name like `configs/models/my-model.json`
+```json
+{
+  "type": "CustomClass", # class name that implement your new model
+  "name": "my-model",    # indicator used in command line and the config filename 
+  "param_a": 1024,       # other parameters required to init your model
+  "param_b": 32,
+  ...
+}
 ```
-
-3. Add the forward branch in `get_latent_action(x, tokenizer, model_name)` and return either `(tokens, indices)` or `tokens`. Classification and regression use `tokens`; `tokens.shape[-1]` is the `--dim` value for classification.
-
-```python
-elif model_name == "my-model":
-    tokens = tokenizer(x)          # expected shape: (B, ..., D)
-    indices = np.array([])
-```
-
-4. If the model needs a different input format, add a matching branch in [lary/extract.py](lary/extract.py) for dataset preprocessing and batch execution. Reuse existing branches such as `dinov2-origin`, `vjepa2`, or `wan2-2` as templates.
-
-5. Set any required environment variables in `env.sh`, then run:
+3. Set any required environment variables in `env.sh`, then run:
 
 ```bash
 python -m lary.cli extract \

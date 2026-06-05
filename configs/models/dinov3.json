@@ -10,6 +10,5 @@
   "temporal_depth": 4,
   "dim_head": 64,
   "heads": 16,
-  "code_seq_len": 16,
-  "ckpt_path": "/mnt/dolphinfs/ssd_pool/docker/user/hadoop-aipnlp/EVA/niuminzhe/larybench_github/larybench-nmz/models/laq_dinov3.pt"
+  "code_seq_len": 16
 }

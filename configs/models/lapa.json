@@ -10,6 +10,5 @@
   "temporal_depth": 8,
   "dim_head": 64,
   "heads": 16,
-  "code_seq_len": 4,
-  "ckpt_path": "/mnt/dolphinfs/ssd_pool/docker/user/hadoop-aipnlp/EVA/niuminzhe/larybench_github/larybench-nmz/models/laq_openx.pt"
+  "code_seq_len": 4
 }

@@ -9,6 +9,7 @@ import torchvision.transforms.functional as F
 
 from registry import MODEL
 from get_latent_action.utils import print_model_params, freeze_backbone, load_video_frames, read_video_tensor
+model_dir = os.environ.get("MODEL_DIR")
 
 
 class LaryBaseModel(ABC):
@@ -109,7 +110,7 @@ class LAPALaryWrap(LaqBaseModel):
         super().__init__()
         from get_latent_action.models.laq_model import LatentActionQuantization
         self.name = kwargs.pop("name", "lapa")
-        ckpt_path = kwargs.pop("ckpt_path", None)
+        ckpt_path = f"{model_dir}/laq_openx.pt"
         self.model = LatentActionQuantization(*args, **kwargs)
         self.model.to('cuda')
         self.model.load(ckpt_path)
@@ -122,7 +123,7 @@ class Magvit2LaryWrap(LaqBaseModel):
         super().__init__()
         from get_latent_action.models.laq_model import LatentActionQuantizationMagvit2
         self.name = kwargs.pop("name", "magvit2")
-        ckpt_path = kwargs.pop("ckpt_path", None)
+        ckpt_path = f"{model_dir}/magvit2.pt"
         self.model = LatentActionQuantizationMagvit2(*args, **kwargs)
         self.model.to('cuda')
         self.model.load(ckpt_path)
@@ -135,7 +136,7 @@ class Dinov2LaryWrap(LaqBaseModel):
         super().__init__()
         from get_latent_action.models.laq_model import LatentActionQuantizationDinov2Feature
         self.name = kwargs.pop("name", "dinov2")
-        ckpt_path = kwargs.pop("ckpt_path", None)
+        ckpt_path = f"{model_dir}/laq_dinov2.pt"
         self.model = LatentActionQuantizationDinov2Feature(*args, **kwargs)
         self.model.to('cuda')
         self.model.load(ckpt_path)
@@ -148,7 +149,7 @@ class Dinov3LaryWrap(LaqBaseModel):
         super().__init__()
         from get_latent_action.models.laq_model import LatentActionQuantizationDinov3Feature
         self.name = kwargs.pop("name", "dinov3")
-        ckpt_path = kwargs.pop("ckpt_path", None)
+        ckpt_path = f"{model_dir}/laq_dinov3.pt"
         self.model = LatentActionQuantizationDinov3Feature(*args, **kwargs)
         self.model.to('cuda')
         self.model.load_state_dict(torch.load(ckpt_path)['model'])
@@ -161,7 +162,7 @@ class Siglip2LaryWrap(LaqBaseModel):
         super().__init__()
         from get_latent_action.models.laq_model import LatentActionQuantizationSiglipv2Feature
         self.name = kwargs.pop("name", "siglip2")
-        ckpt_path = kwargs.pop("ckpt_path", None)
+        ckpt_path = f"{model_dir}/siglip2.pt"
         self.model = LatentActionQuantizationSiglipv2Feature(*args, **kwargs)
         self.model.to('cuda')
         self.model.load(ckpt_path)
@@ -174,7 +175,7 @@ class UnivlaLaryWrap(LaqBaseModel):
         super().__init__()
         from get_latent_action.models.univla.genie.model import ControllableDINOLatentActionModel
         self.name = kwargs.pop("name", "univla")
-        ckpt_path = kwargs.pop("ckpt_path", None)
+        ckpt_path = os.environ.get("UNIVLA_CKPT_PATH", os.path.join(model_dir or "", "univla-latent-action-model", "lam-stage-2.ckpt"))
         self.model = ControllableDINOLatentActionModel(*args, **kwargs)
         self.model.to('cuda')
         ckpt = torch.load(ckpt_path)["state_dict"]
@@ -198,7 +199,7 @@ class VillaXLaryWrap(LaryBaseModel):
         super().__init__()
         from get_latent_action.models.villa_x.lam.model import IgorModel
         self.name = kwargs.pop("name", "villa-x")
-        ckpt_path = kwargs.pop("ckpt_path", None)
+        ckpt_path = os.environ.get("VILLA_X_CKPT_PATH")
         self.model = IgorModel.from_pretrained(ckpt_path).cuda()
         self.prepare_model_for_extraction()
 
@@ -328,7 +329,7 @@ class Wan2_2LaryWrap(LaryBaseModel):
         super().__init__()
         from get_latent_action.models.wan2_2.wan.modules.vae2_2 import Wan2_2_VAE
         self.name = kwargs.pop("name", "wan2-2")
-        ckpt_path = kwargs.pop("ckpt_path", None)
+        ckpt_path = os.environ.get("WAN22_VAE_PATH")
         self.model = Wan2_2_VAE(vae_pth=ckpt_path, device="cuda")
         self.prepare_model_for_extraction()
 
