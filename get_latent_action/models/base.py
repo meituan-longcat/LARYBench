@@ -396,7 +396,6 @@ class Wan2_2LaryWrap(LaryBaseModel):
         return global_idx, tensor, rel_indices
 
 
-
 class VjepaBaseModel(LaryBaseModel):
     def __init__(self, *args, **kwargs):
         super().__init__()
@@ -502,6 +501,7 @@ class Vjepa2LaryWrap(VjepaBaseModel):
             crop_size=224,
             normalize=((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
         )
+        self.prepare_model_for_extraction()
 
 
 @MODEL.register_module()
@@ -550,6 +550,7 @@ class Vjepa21LaryWrap(VjepaBaseModel):
             crop_size=384,
             normalize=((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
         )
+        self.prepare_model_for_extraction()
 
 
 @MODEL.register_module()

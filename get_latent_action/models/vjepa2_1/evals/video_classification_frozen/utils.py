@@ -7,9 +7,9 @@ import numpy as np
 import torch
 import torchvision.transforms as transforms
 
-import src.datasets.utils.video.transforms as video_transforms
-import src.datasets.utils.video.volume_transforms as volume_transforms
-from src.datasets.utils.video.randerase import RandomErasing
+import get_latent_action.models.vjepa2_1.src.datasets.utils.video.transforms as video_transforms
+import get_latent_action.models.vjepa2_1.src.datasets.utils.video.volume_transforms as volume_transforms
+from get_latent_action.models.vjepa2_1.src.datasets.utils.video.randerase import RandomErasing
 
 
 def make_transforms(

@@ -28,10 +28,9 @@ import logging
 
 import torch
 import torch.nn as nn
-
-import src.models.vision_transformer as vit
-from src.masks.utils import apply_masks
-from src.models.utils.pos_embs import get_1d_sincos_pos_embed
+import get_latent_action.models.vjepa2_1.app.vjepa_2_1.models.vision_transformer as vit
+from get_latent_action.models.vjepa2_1.src.masks.utils import apply_masks
+from get_latent_action.models.vjepa2_1.src.models.utils.pos_embs import get_1d_sincos_pos_embed
 
 logging.basicConfig()
 logger = logging.getLogger()
