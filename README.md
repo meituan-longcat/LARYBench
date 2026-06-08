@@ -94,11 +94,11 @@ pip install -r requirements.txt
 
 Some model families keep their original dependencies and should be configured from their upstream projects when you evaluate them:
 
-| Model family | Environment guidance |
-|---|---|
+| Model family                                                                                                                      | Environment guidance |
+|-----------------------------------------------------------------------------------------------------------------------------------|---|
 | `dinov2`, `dinov3`, `siglip2`, `dinov2-origin`, `dinov3-origin`, `siglip2-origin`, `lapa`, `magvit2`, `univla`, `flux2`, `wan2-2` | Use `larybench` |
-| `vjepa2` | Follow [facebookresearch/vjepa2](https://github.com/facebookresearch/vjepa2) and activate your `vjepa2` env |
-| `villa-x` | Follow [microsoft/villa-x](https://github.com/microsoft/villa-x) and set `VILLA_X_DIR` |
+| `vjepa2`, `vjepa2.1`                                                                                                              | Follow [facebookresearch/vjepa2](https://github.com/facebookresearch/vjepa2) and activate your `vjepa2` env |
+| `villa-x`                                                                                                                         | Follow [microsoft/villa-x](https://github.com/microsoft/villa-x) and set `VILLA_X_DIR` |
 
 Configure paths in `env.sh`, then source it before running commands. Example:
 
@@ -300,21 +300,22 @@ CUDA_VISIBLE_DEVICES=0 python -m lary.cli regress \
 
 ## Supported Models
 
-| Model key | What it extracts | Environment |
-|---|---|---|
-| `dinov2` | LAPA-DINOv2 latent actions | `larybench` |
-| `dinov3` | LAPA-DINOv3 latent actions | `larybench` |
-| `siglip2` | LAPA-SigLIP2 latent actions | `larybench` |
-| `magvit2` | Open-MAGVIT2 based latent actions | `larybench`; set `MAGVIT2_CONFIG_PATH` and `MAGVIT2_TOKENIZER_PATH` |
-| `dinov2-origin` | Raw DINOv2 visual features | `larybench` |
-| `dinov3-origin` | Raw DINOv3 visual features | `larybench` |
-| `siglip2-origin` | Raw SigLIP2 visual features | `larybench` |
-| `lapa` | LAPA / LAQ latent actions | `larybench` |
-| `univla` | UniVLA latent actions | `larybench`; set `UNIVLA_CKPT_PATH` |
-| `villa-x` | villa-X latent actions | upstream villa-X env |
-| `flux2` | FLUX.2 VAE features | `larybench`; set `AE_MODEL_PATH` |
-| `vjepa2` | V-JEPA2 video features | upstream `vjepa2` env |
-| `wan2-2` | Wan2.2 VAE features | upstream `wan` env |
+| Model key        | What it extracts                  | Environment |
+|------------------|-----------------------------------|---|
+| `dinov2`         | LAPA-DINOv2 latent actions        | `larybench` |
+| `dinov3`         | LAPA-DINOv3 latent actions        | `larybench` |
+| `siglip2`        | LAPA-SigLIP2 latent actions       | `larybench` |
+| `magvit2`        | Open-MAGVIT2 based latent actions | `larybench`; set `MAGVIT2_CONFIG_PATH` and `MAGVIT2_TOKENIZER_PATH` |
+| `dinov2-origin`  | Raw DINOv2 visual features        | `larybench` |
+| `dinov3-origin`  | Raw DINOv3 visual features        | `larybench` |
+| `siglip2-origin` | Raw SigLIP2 visual features       | `larybench` |
+| `lapa`           | LAPA / LAQ latent actions         | `larybench` |
+| `univla`         | UniVLA latent actions             | `larybench`; set `UNIVLA_CKPT_PATH` |
+| `villa-x`        | villa-X latent actions            | upstream villa-X env |
+| `flux2`          | FLUX.2 VAE features               | `larybench`; set `AE_MODEL_PATH` |
+| `vjepa2`         | V-JEPA2 video features            | upstream `vjepa2` env |
+| `vjepa2-1`       | V-JEPA2-1 video features          | upstream `vjepa2` env |
+| `wan2-2`         | Wan2.2 VAE features               | upstream `wan` env |
 
 ## Adding a Custom Model
 
@@ -448,7 +449,7 @@ For any questions regarding licensing, please refer to the original dataset sour
 
 We thank the following open-source projects for their contributions:
 
-- [V-JEPA2](https://github.com/facebookresearch/vjepa2)
+- [V-JEPA2/V-JEPA2.1](https://github.com/facebookresearch/vjepa2)
 - [UniVLA](https://github.com/OpenDriveLab/UniVLA)
 - [Wan2.2](https://github.com/Wan-Video/Wan2.2)
 - [flux2](https://github.com/black-forest-labs/flux2)

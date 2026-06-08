@@ -499,6 +499,54 @@ class Vjepa2LaryWrap(LaryBaseModel):
 
 
 @MODEL.register_module()
+class Vjepa21LaryWrap(Vjepa2LaryWrap):
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+        from get_latent_action.models.vjepa2_1.evals.video_classification_frozen.models import init_module
+        self.name = kwargs.pop("name", "vjepa2-1")
+        args_model = {
+            "encoder": {
+                "checkpoint_key": "ema_encoder",
+                "img_temporal_dim_size": 1,
+                "model_name": "vit_large",
+                "patch_size": 16,
+                "tubelet_size": 2,
+                "uniform_power": True,
+                "use_rope": True
+            }
+        }
+
+        args_wrapper = {
+            "max_frames": 128,
+            "use_pos_embed": False
+        }
+
+        self.model = init_module(
+            module_name='get_latent_action.models.vjepa2_1.evals.video_classification_frozen.modelcustom.vit_encoder_multiclip',
+            frames_per_clip=16,
+            resolution=384,
+            checkpoint=os.environ.get("VJEPA21_CKPT_PATH"),
+            model_kwargs=args_model,
+            wrapper_kwargs=args_wrapper,
+            device="cuda",
+        )
+
+        from get_latent_action.models.vjepa2_1.evals.video_classification_frozen.utils import make_transforms
+        self.transform = make_transforms(
+            training=False,
+            num_views_per_clip=1,
+            random_horizontal_flip=False,
+            random_resize_aspect_ratio=(1.0, 1.0),
+            random_resize_scale=(1.0, 1.0),
+            reprob=0,
+            auto_augment=False,
+            motion_shift=False,
+            crop_size=384,
+            normalize=((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+        )
+
+
+@MODEL.register_module()
 class Dinov2OriginLaryWrap(LaryBaseModel):
     def __init__(self, *args, **kwargs):
         super().__init__()
