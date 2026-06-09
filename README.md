@@ -30,6 +30,7 @@ Given any model that produces latent action representations (LAMs or visual enco
 ---
 
 ## News
+- **[2026-06-10]** LARYBench now supports V-JEPA 2.1, update model interface easy for customization.
 - **[2026-05-01]** LARYBench now supports SigLIP2, relative-action regression evaluation (`target = action_tgt - action_src`), and a fast dataset integrity checker. Happy Labor Day!
 - **[2026-04-27]** We have open-sourced all datasets on [HuggingFace](https://huggingface.co/datasets/meituan-longcat/LARYBench).
 - **[2026-04-21]** We release the general LAMs trained in ablation studies, [LAPA-DINOv3](https://huggingface.co/AGI-Eval/LAPA-DINOv3) and  [LAPA-DINOv2](https://huggingface.co/AGI-Eval/LAPA-DINOv2). Even though these models are still rough experimental prototypes, with clear flaws in both training data and methods, we’re sharing them anyway to help push latent action research forward together. Have fun~
@@ -314,7 +315,7 @@ CUDA_VISIBLE_DEVICES=0 python -m lary.cli regress \
 | `villa-x`        | villa-X latent actions            | upstream villa-X env |
 | `flux2`          | FLUX.2 VAE features               | `larybench`; set `AE_MODEL_PATH` |
 | `vjepa2`         | V-JEPA2 video features            | upstream `vjepa2` env |
-| `vjepa2-1`       | V-JEPA2-1 video features          | upstream `vjepa2` env |
+| `vjepa2-1`       | V-JEPA2.1 video features          | upstream `vjepa2` env |
 | `wan2-2`         | Wan2.2 VAE features               | upstream `wan` env |
 
 ## Adding a Custom Model
@@ -327,11 +328,11 @@ LARYBench only needs your model to convert a video or image pair into a numeric 
 class CustomClass(LaryBaseModel):
     def __init__(self, name="my-model", param_a, param_b, ...):
 ```
-2. Add a config file for new model with the same name like `configs/models/my-model.json`
+2. Add a config file containing all parameters required for model initialization under folder `configs/models/` with the filename same as model key, like `my-model.json`
 ```json
 {
   "type": "CustomClass", # class name that implement your new model
-  "name": "my-model",    # indicator used in command line and the config filename 
+  "name": "my-model",    # model key used in command line and the config filename 
   "param_a": 1024,       # other parameters required to init your model
   "param_b": 32,
   ...
