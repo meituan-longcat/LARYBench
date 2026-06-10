@@ -45,7 +45,7 @@ export VILLA_X_CKPT_PATH="${VILLA_X_CKPT_PATH:-<path/to/villa-x/lam>}"
 export AE_MODEL_PATH="${AE_MODEL_PATH:-<path/to/FLUX.2-dev/ae.safetensors>}"
 export WAN22_VAE_PATH="${WAN22_VAE_PATH:-<path/to/Wan2.2_VAE.pth>}"
 export VJEPA2_CKPT_PATH="${VJEPA2_CKPT_PATH:-<path/to/vjepa2/vitl.pt>}"
-
+export VJEPA21_CKPT_PATH="${VJEPA2_CKPT_PATH:-<path/to/vjepa21/vitl.pt>}"
 # -----------------------------------------------------------------------------
 # Pretrained Model Paths
 # -----------------------------------------------------------------------------
