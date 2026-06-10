@@ -30,7 +30,7 @@ Given any model that produces latent action representations (LAMs or visual enco
 ---
 
 ## News
-- **[2026-06-10]** LARYBench now supports V-JEPA 2.1, update model interface easy for customization.
+- **[2026-06-10]** LARYBench now supports V-JEPA 2.1 and simplify the way to add new custom models. We welcome all kinds of models evaluating on LARYBench and contributing to our leaderboards!
 - **[2026-05-01]** LARYBench now supports SigLIP2, relative-action regression evaluation (`target = action_tgt - action_src`), and a fast dataset integrity checker. Happy Labor Day!
 - **[2026-04-27]** We have open-sourced all datasets on [HuggingFace](https://huggingface.co/datasets/meituan-longcat/LARYBench).
 - **[2026-04-21]** We release the general LAMs trained in ablation studies, [LAPA-DINOv3](https://huggingface.co/AGI-Eval/LAPA-DINOv3) and  [LAPA-DINOv2](https://huggingface.co/AGI-Eval/LAPA-DINOv2). Even though these models are still rough experimental prototypes, with clear flaws in both training data and methods, we’re sharing them anyway to help push latent action research forward together. Have fun~
