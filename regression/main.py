@@ -14,6 +14,7 @@ from accelerate.utils import set_seed
 import json
 from diffusers.optimization import get_cosine_schedule_with_warmup, get_constant_schedule_with_warmup
 from regression.dit import DiT
+from regression.action_chunk import canonicalize_absolute_action, delta_to_absolute_last_action, to_delta_action_target
 from get_latent_action.utils import print_model_params
 from diffusers import DDPMScheduler
 import matplotlib.pyplot as plt
@@ -67,14 +68,18 @@ def get_group_indices(dataset_name):
     return GROUP_INDICES.get(dataset_name, None)
 
 def get_action_steps(chunk_size, action_mode):
-    return 1 if action_mode == 'relative' else chunk_size
+    return 1 if action_mode in {'relative', 'delta'} else chunk_size
 
 def get_regression_root(action_data_root, action_mode='absolute'):
     root = action_data_root or os.environ.get('DATA_DIR')
     if not root:
         return None
     root = os.path.normpath(root)
-    expected_leaf = 'regression_relative' if action_mode == 'relative' else 'regression'
+    mode_leaf = {
+        'relative': 'regression_relative',
+        'delta': 'regression_delta',
+    }
+    expected_leaf = mode_leaf.get(action_mode, 'regression')
     if os.path.basename(root) == expected_leaf:
         return root
     return os.path.join(root, expected_leaf)
@@ -83,23 +88,29 @@ def get_regression_data_subdir(dataset_name):
     dataset_key = dataset_name.lower()
     return REGRESSION_DATA_SUBDIR.get(dataset_key, dataset_key)
 
-def get_relative_stats_path(action_data_root, dataset_name):
-    regression_root = get_regression_root(action_data_root, 'relative')
+def get_action_stats_path(action_data_root, dataset_name, action_mode):
+    regression_root = get_regression_root(action_data_root, action_mode)
     if not regression_root:
         return None
     subdir = get_regression_data_subdir(dataset_name)
     stats_dir = os.path.join(regression_root, subdir)
     dataset_key = dataset_name.lower()
-    dataset_specific = os.path.join(stats_dir, f"relative_action_stats_{dataset_key}.json")
-    default = os.path.join(stats_dir, "relative_action_stats.json")
+    dataset_specific = os.path.join(stats_dir, f"{action_mode}_action_stats_{dataset_key}.json")
+    default = os.path.join(stats_dir, f"{action_mode}_action_stats.json")
     if os.path.exists(dataset_specific):
         return dataset_specific
     if os.path.exists(default):
         return default
     return dataset_specific
 
+def get_relative_stats_path(action_data_root, dataset_name):
+    return get_action_stats_path(action_data_root, dataset_name, 'relative')
+
+def get_delta_stats_path(action_data_root, dataset_name):
+    return get_action_stats_path(action_data_root, dataset_name, 'delta')
+
 def get_action_data_root(action_data_root, dataset_name, split, action_mode='absolute'):
-    if action_mode != 'relative' and not action_data_root:
+    if action_mode not in {'relative', 'delta'} and not action_data_root:
         return None
     regression_root = get_regression_root(action_data_root, action_mode)
     if not regression_root:
@@ -133,7 +144,43 @@ def to_action_target(action, action_dim, action_mode):
             raise ValueError(f"Action size {flat.size} is not divisible by action_dim={action_dim}.")
         seq = flat.reshape(-1, action_dim)
         return (seq[-1] - seq[0]).astype(np.float32, copy=False)
+    if action_mode == 'delta':
+        raise ValueError("delta action mode requires dataset_name. Use to_dataset_action_target().")
     return flat.astype(np.float32, copy=False)
+
+def to_dataset_action_target(action, dataset_name, action_dim, action_mode):
+    if action_mode == 'delta':
+        flat = np.asarray(action).reshape(-1)
+        if flat.size == action_dim:
+            return flat.astype(np.float32, copy=False)
+        return to_delta_action_target(action, dataset_name, action_dim)
+    return to_action_target(action, action_dim, action_mode)
+
+def get_first_last_actions(action, action_dim):
+    seq = np.asarray(action, dtype=np.float32).reshape(-1, action_dim)
+    return seq[0], seq[-1]
+
+def load_delta_stats(stats_json, dataset_name):
+    if not stats_json or not os.path.exists(stats_json):
+        return None, None, {}
+    with open(stats_json, 'r') as f:
+        stats = json.load(f)
+    if stats.get('action_mode') not in {None, 'delta'}:
+        return None, None, {}
+    if dataset_name in ['agibotbeta', 'robocoin'] and 'robot_stats' in stats:
+        robot_stats = {}
+        for robot_type, item in stats['robot_stats'].items():
+            mean = np.array(item['mean'], dtype=np.float64)
+            std = np.array(item['std'], dtype=np.float64)
+            std = np.where(std < 1e-6, 1.0, std)
+            robot_stats[str(robot_type)] = (mean, std)
+        return None, None, robot_stats
+    if 'mean' not in stats or 'std' not in stats:
+        return None, None, {}
+    mean = np.array(stats['mean'], dtype=np.float64)
+    std = np.array(stats['std'], dtype=np.float64)
+    std = np.where(std < 1e-6, 1.0, std)
+    return mean, std, {}
 
 # ==========================================
 # Utils
@@ -233,6 +280,9 @@ class ActionExpertDataset(Dataset):
         action_std=None,
         action_mode='absolute',
         action_data_root=None,
+        delta_robot_stats=None,
+        normalize_actions=True,
+        return_absolute_actions=True,
     ):
         self.data = pd.read_csv(csv_path)
         self.dataset_name = dataset_name
@@ -241,13 +291,14 @@ class ActionExpertDataset(Dataset):
         self.action_mode = action_mode
         self.action_steps = get_action_steps(chunk_size, action_mode)
         self.action_data_root = action_data_root
+        self.normalize_actions = normalize_actions
+        self.return_absolute_actions = return_absolute_actions
         
         # Detect split from CSV path or filename
         self.split = self._detect_split(csv_path)
 
         # Resolve relative paths
         self._resolve_paths()
-
         # Calvin 的全局统计信息
         self.action_mean = action_mean
         self.action_std = action_std
@@ -265,6 +316,8 @@ class ActionExpertDataset(Dataset):
                     s_arr = np.array(stats['std'])
                     s_arr = np.where(s_arr < 1e-6, 1.0, s_arr)
                     self.robot_stats[r_type] = (m_arr, s_arr)
+        if delta_robot_stats:
+            self.robot_stats.update(delta_robot_stats)
 
         if 'la_path' not in self.data.columns:
             raise ValueError("CSV must contain 'la_path' for latent actions.")
@@ -324,6 +377,12 @@ class ActionExpertDataset(Dataset):
                 self.data[col] = None
                 continue
             if col == 'action' and action_root:
+                absolute_root = os.path.join(data_root, subdir) if (data_root and subdir) else data_root
+                if absolute_root:
+                    self.data['_absolute_action'] = self.data[col].apply(
+                        lambda x: resolve_under_root(data_root, subdir, x)
+                        if pd.notna(x) and not os.path.isabs(str(x)) else x
+                    )
                 self.data[col] = self.data[col].apply(
                     lambda x: resolve_under_root(action_root, subdir, x)
                 )
@@ -363,7 +422,8 @@ class ActionExpertDataset(Dataset):
 
         la_data = np.load(row['la_path'])
         latent_action = la_data['tokens'].flatten() if 'tokens' in la_data else la_data.flatten()
-        action = to_action_target(np.load(row['action']), self.action_dim, self.action_mode)
+        action_raw = np.load(row['action'])
+        action = to_dataset_action_target(action_raw, self.dataset_name, self.action_dim, self.action_mode)
             
         # === 核心修改：根据 robot_type 获取全局 Mean 和 Std ===
         if self.dataset_name in ['agibotbeta', 'robocoin']:
@@ -375,24 +435,38 @@ class ActionExpertDataset(Dataset):
                 a_mean, a_std = np.zeros(self.action_dim), np.ones(self.action_dim)
         else:
             a_mean, a_std = self.action_mean, self.action_std
+        if a_mean is None or a_std is None:
+            raise ValueError(f"Missing action normalization statistics for action_mode={self.action_mode}.")
 
         # 扩展到输出时间步数：absolute 预测完整 chunk；relative 只预测 last - first。
         a_mean_tiled = np.tile(a_mean, self.action_steps)
         a_std_tiled = np.tile(a_std, self.action_steps)
 
-        action_norm = (action - a_mean_tiled) / a_std_tiled
+        if self.normalize_actions:
+            action_target = (action - a_mean_tiled) / a_std_tiled
+        else:
+            action_target = action.astype(np.float32, copy=False)
         
         src_img_path = str(row['src_img']) if 'src_img' in row else ""
         tgt_img_path = str(row['tgt_img']) if 'tgt_img' in row else ""
 
-        return (
+        item = (
             torch.from_numpy(latent_action).float(),
-            torch.from_numpy(action_norm).float(),
+            torch.from_numpy(action_target).float(),
             src_img_path,
             tgt_img_path,
             torch.from_numpy(a_mean_tiled).float(), 
             torch.from_numpy(a_std_tiled).float()
         )
+        if self.return_absolute_actions:
+            absolute_action_raw = np.load(row['_absolute_action']) if self.action_mode == 'delta' else action_raw
+
+            first_action, last_action = get_first_last_actions(absolute_action_raw, self.action_dim)
+            item += (
+                torch.from_numpy(first_action).float(),
+                torch.from_numpy(last_action).float(),
+            )
+        return item
 
 # ==========================================
 # 2. Model Definitions (保持不变)
@@ -470,7 +544,19 @@ def train_one_epoch(model, loader, optimizer, scheduler, accelerator, epoch, mod
         latent_action, action = batch[0], batch[1]
         optimizer.zero_grad()
         
-        if model_type == 'dit': loss = unwrapped_model.loss(latent_action, action)
+        if model_type == 'dit':
+            batch_size = latent_action.shape[0]
+            gt_action_seq = action.view(batch_size, unwrapped_model.action_steps, unwrapped_model.action_dim)
+            timesteps = torch.randint(
+                0,
+                unwrapped_model.noise_scheduler.config.num_train_timesteps,
+                (batch_size,),
+                device=latent_action.device,
+            ).long()
+            noise = torch.randn_like(gt_action_seq)
+            noisy_actions = unwrapped_model.noise_scheduler.add_noise(gt_action_seq, noise, timesteps)
+            noise_pred = model(latent_action, noisy_actions, timesteps)
+            loss = F.huber_loss(noise_pred, noise, delta=1.0)
         else: loss = unwrapped_model.loss(model(latent_action), action)
         
         accelerator.backward(loss)
@@ -501,7 +587,51 @@ def train_one_epoch(model, loader, optimizer, scheduler, accelerator, epoch, mod
 
     return total_loss / total_samples
 
-def evaluate(model, loader, accelerator, model_type, epoch, save_dir, action_steps, dim_labels, dataset_name, prefix="val"):
+def delta_batch_to_absolute_last(pred_delta, first_action, dataset_name, action_dim, target_action=None):
+    pred_np = pred_delta.detach().cpu().numpy()
+    first_np = first_action.detach().cpu().numpy()
+    target_np = target_action.detach().cpu().numpy() if target_action is not None else None
+    absolute = [
+        canonicalize_absolute_action(
+            delta_to_absolute_last_action(first_np[i], pred_np[i], dataset_name, action_dim),
+            dataset_name,
+            action_dim,
+            reference_action=target_np[i] if target_np is not None else None,
+        )
+        for i in range(pred_np.shape[0])
+    ]
+    return torch.from_numpy(np.stack(absolute)).to(device=pred_delta.device, dtype=pred_delta.dtype)
+
+def prepare_metric_actions(pred_action, action, a_mean, a_std, first_action, last_action, args):
+    action_mode = args.action_mode
+    dataset_name = args.dataset
+    loss_type = args.loss_type
+    if action_mode != 'delta' or loss_type == 'norm-mse':
+        return pred_action, action
+    if first_action is None or last_action is None:
+        raise ValueError("Delta evaluation requires first and last absolute actions in the batch.")
+    pred_delta = (pred_action * a_std) + a_mean
+    action_dim = get_action_dim(dataset_name)
+    pred_last_abs = delta_batch_to_absolute_last(pred_delta, first_action, dataset_name, action_dim, target_action=last_action)
+    target_last_abs = torch.from_numpy(
+        np.stack(
+            [
+                canonicalize_absolute_action(
+                    last_action[i].detach().cpu().numpy(),
+                    dataset_name,
+                    action_dim,
+                    reference_action=last_action[i].detach().cpu().numpy(),
+                )
+                for i in range(last_action.shape[0])
+            ]
+        )
+    ).to(device=last_action.device, dtype=last_action.dtype)
+    return pred_last_abs, target_last_abs
+
+def evaluate(model, loader, accelerator, args, epoch, action_steps, dim_labels, prefix="val"):
+    model_type = args.model_type
+    save_dir = args.save_dir
+
     model.eval()
     all_preds, all_targets = [], []
     total_huber_loss, total_samples = 0.0, 0
@@ -511,6 +641,8 @@ def evaluate(model, loader, accelerator, model_type, epoch, save_dir, action_ste
         for step, batch in enumerate(tqdm(loader, desc=f"Evaluating {prefix}", disable=not accelerator.is_local_main_process)):
             latent_action, action = batch[0], batch[1]
             src_paths, tgt_paths, a_mean, a_std = batch[2], batch[3], batch[4], batch[5]
+            first_action = batch[6] if len(batch) > 6 else None
+            last_action = batch[7] if len(batch) > 7 else None
 
             if model_type == 'dit':
                 h_loss = unwrapped_model.loss(latent_action, action)
@@ -523,8 +655,18 @@ def evaluate(model, loader, accelerator, model_type, epoch, save_dir, action_ste
             total_huber_loss += accelerator.gather(h_loss).mean().item()
             total_samples += 1
 
-            all_preds.append(accelerator.gather_for_metrics(pred_action))
-            all_targets.append(accelerator.gather_for_metrics(action))
+            metric_pred, metric_target = prepare_metric_actions(
+                pred_action,
+                action,
+                a_mean,
+                a_std,
+                first_action,
+                last_action,
+                args
+            )
+
+            all_preds.append(accelerator.gather_for_metrics(metric_pred))
+            all_targets.append(accelerator.gather_for_metrics(metric_target))
 
             if step == 0 and accelerator.is_local_main_process:
                 current_batch_size = pred_action.shape[0]
@@ -548,9 +690,10 @@ def evaluate(model, loader, accelerator, model_type, epoch, save_dir, action_ste
     all_targets = torch.cat(all_targets, dim=0)
     
     val_loss_final = total_huber_loss / total_samples
+    metric_action_steps = 1 if action_mode == 'delta' else action_steps
     val_total_mse = F.mse_loss(all_preds, all_targets).item()
-    val_dim_metrics = compute_per_dim_mse(all_preds, all_targets, action_steps, dim_labels)
-    val_group_metrics = compute_group_mse(all_preds, all_targets, action_steps, dataset_name)
+    val_dim_metrics = compute_per_dim_mse(all_preds, all_targets, metric_action_steps, dim_labels)
+    val_group_metrics = compute_group_mse(all_preds, all_targets, metric_action_steps, dataset_name)
     
     return val_loss_final, val_total_mse, val_dim_metrics, val_group_metrics
 
@@ -585,16 +728,22 @@ def main():
     parser.add_argument('--stride', type=int, default=5)
     parser.add_argument('--dataset', type=str, default='calvin')
     parser.add_argument('--model_type', type=str, default='mlp', choices=['mlp', 'dit'])
-    parser.add_argument('--action_mode', type=str, default='absolute', choices=['absolute', 'relative'],
-                        help="absolute predicts the full action chunk; relative predicts last action minus first action.")
+    parser.add_argument('--action_mode', type=str, default='absolute', choices=['absolute', 'relative', 'delta'],
+                        help="absolute predicts the full action chunk; relative predicts last action minus first action; "
+                             "delta predicts the last end-pose action relative to the first pose.")
+    parser.add_argument('--loss_type', type=str, default='norm-mse', choices=['norm-mse'],
+                        help="loss type defined for delta action mode only. norm-mse calculates the mse loss of "
+                             "delta action after normalization")
     parser.add_argument('--action_data_root', type=str, default=None,
-                        help="Optional LARYBench data root. Relative mode reads regression/<dataset>_relative/ under this root.")
+                        help="Optional LARYBench data root. Relative/delta modes read precomputed action files under this root.")
     parser.add_argument('--dit_hidden_size', type=int, default=512)
     parser.add_argument('--dit_depth', type=int, default=6)
     args = parser.parse_args()
     global_stats_json = args.global_stats_json
     if args.action_mode == 'relative' and global_stats_json is None:
         global_stats_json = get_relative_stats_path(args.action_data_root, args.dataset)
+    if args.action_mode == 'delta' and global_stats_json is None:
+        global_stats_json = get_delta_stats_path(args.action_data_root, args.dataset)
     args.global_stats_json = global_stats_json
 
     make_reproducible(args.seed)
@@ -616,7 +765,24 @@ def main():
     
     # Calvin 的全局统计信息
     action_mean, action_std = None, None
-    if args.action_mode == 'relative' and global_stats_json and os.path.exists(global_stats_json):
+    delta_robot_stats = None
+    if args.action_mode == 'delta':
+        action_mean, action_std, delta_robot_stats = load_delta_stats(global_stats_json, args.dataset)
+        if args.dataset not in ['agibotbeta', 'robocoin'] and (action_mean is None or action_std is None):
+            raise FileNotFoundError(
+                "Delta action mode requires precomputed delta-action statistics. "
+                f"Expected: {global_stats_json}. Generate them with utils/prepare_relative_actions.py "
+                "--action-mode delta or pass --global_stats_json explicitly."
+            )
+        if args.dataset in ['agibotbeta', 'robocoin'] and not delta_robot_stats:
+            raise FileNotFoundError(
+                "Delta action mode requires precomputed per-robot delta-action statistics. "
+                f"Expected: {global_stats_json}. Generate them with utils/prepare_relative_actions.py "
+                "--action-mode delta or pass --global_stats_json explicitly."
+            )
+        if accelerator.is_local_main_process:
+            print("Delta action mode reads precomputed relative end-pose targets for training.")
+    elif args.action_mode == 'relative' and global_stats_json and os.path.exists(global_stats_json):
         with open(global_stats_json, 'r') as f:
             stats = json.load(f)
         if args.dataset in ['agibotbeta', 'robocoin']:
@@ -641,11 +807,11 @@ def main():
 
     train_dataset = ActionExpertDataset(
         args.train_csv, args.dataset, args.stride, global_stats_json, action_mean, action_std,
-        action_mode=args.action_mode, action_data_root=args.action_data_root
+        action_mode=args.action_mode, action_data_root=args.action_data_root, delta_robot_stats=delta_robot_stats
     )
     val_dataset = ActionExpertDataset(
         args.val_csv, args.dataset, args.stride, global_stats_json, action_mean, action_std,
-        action_mode=args.action_mode, action_data_root=args.action_data_root
+        action_mode=args.action_mode, action_data_root=args.action_data_root, delta_robot_stats=delta_robot_stats
     )
     
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True)
@@ -655,7 +821,7 @@ def main():
     if args.val_unseen_csv and os.path.exists(args.val_unseen_csv):
         val_unseen_dataset = ActionExpertDataset(
             args.val_unseen_csv, args.dataset, args.stride, global_stats_json, action_mean, action_std,
-            action_mode=args.action_mode, action_data_root=args.action_data_root
+            action_mode=args.action_mode, action_data_root=args.action_data_root, delta_robot_stats=delta_robot_stats
         )
         val_unseen_loader = DataLoader(val_unseen_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, pin_memory=True)
 
@@ -681,10 +847,10 @@ def main():
     best_result = {}  # 用于记录最佳结果
     for epoch in range(1, args.epochs + 1):
         train_loss = train_one_epoch(model, train_loader, optimizer, scheduler, accelerator, epoch, args.model_type, action_steps, dim_labels)
-        val_loss, val_mse, val_dim_metrics, val_group_metrics = evaluate(model, val_loader, accelerator, args.model_type, epoch, args.save_dir, action_steps, dim_labels, args.dataset, prefix="val_seen")
+        val_loss, val_mse, val_dim_metrics, val_group_metrics = evaluate(model, val_loader, accelerator, args, epoch, action_steps, dim_labels, prefix="val_seen")
         
         if val_unseen_loader:
-            u_val_loss, u_val_mse, u_val_dim_metrics, u_val_group_metrics = evaluate(model, val_unseen_loader, accelerator, args.model_type, epoch, args.save_dir, action_steps, dim_labels, args.dataset, prefix="val_unseen")
+            u_val_loss, u_val_mse, u_val_dim_metrics, u_val_group_metrics = evaluate(model, val_unseen_loader, accelerator, args, epoch, action_steps, dim_labels, prefix="val_unseen")
     
         if accelerator.is_local_main_process:
             log_dict = {"loss/train": train_loss, "loss/val_seen": val_loss, "val_seen/mse": val_mse, "epoch": epoch, "lr": optimizer.param_groups[0]['lr']}
