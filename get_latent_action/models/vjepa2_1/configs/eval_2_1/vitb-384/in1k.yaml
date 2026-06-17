@@ -1,0 +1,162 @@
+cpus_per_task: 16
+eval_name: image_classification_frozen
+folder: /your_folder/evals_2_1/vitb-384/in1k
+mem_per_gpu: 220G
+nodes: 8
+resume_checkpoint: true
+tag: in1k-vitb16-384-16f
+tasks_per_node: 8
+experiment:
+  classifier:
+    num_heads: 16
+    num_probe_blocks: 4
+  data:
+    dataset_name: ImageNet
+    num_classes: 1000
+    root_path: /your_data_path/ImageNet_FullSize/240712/061417/
+    resolution: 384
+  optimization:
+    batch_size: 16
+    multihead_kwargs:
+    - final_lr: 0.0
+      final_weight_decay: 0.0
+      lr: 0.001
+      start_lr: 0.001
+      warmup: 0.0
+      weight_decay: 0.001
+    - final_lr: 0.0
+      final_weight_decay: 0.008
+      lr: 0.0005
+      start_lr: 0.0002
+      warmup: 5
+      weight_decay: 0.008
+    - final_lr: 0.0
+      final_weight_decay: 0.004
+      lr: 0.0005
+      start_lr: 0.0002
+      warmup: 5
+      weight_decay: 0.004
+    - final_lr: 0.0
+      final_weight_decay: 0.002
+      lr: 0.0005
+      start_lr: 0.0002
+      warmup: 5
+      weight_decay: 0.002
+    - final_lr: 0.0
+      final_weight_decay: 0.001
+      lr: 0.0005
+      start_lr: 0.0002
+      warmup: 5
+      weight_decay: 0.001
+    - final_lr: 0.0
+      final_weight_decay: 0.0005
+      lr: 0.0005
+      start_lr: 0.0002
+      warmup: 5
+      weight_decay: 0.0005
+    - final_lr: 0.0
+      final_weight_decay: 0.008
+      lr: 0.001
+      start_lr: 0.0002
+      warmup: 5
+      weight_decay: 0.008
+    - final_lr: 0.0
+      final_weight_decay: 0.004
+      lr: 0.001
+      start_lr: 0.0002
+      warmup: 5
+      weight_decay: 0.004
+    - final_lr: 0.0
+      final_weight_decay: 0.002
+      lr: 0.001
+      start_lr: 0.0002
+      warmup: 5
+      weight_decay: 0.002
+    - final_lr: 0.0
+      final_weight_decay: 0.001
+      lr: 0.001
+      start_lr: 0.0002
+      warmup: 5
+      weight_decay: 0.001
+    - final_lr: 0.0
+      final_weight_decay: 0.0005
+      lr: 0.001
+      start_lr: 0.0002
+      warmup: 5
+      weight_decay: 0.0005
+    - final_lr: 0.0
+      final_weight_decay: 0.008
+      lr: 0.0015
+      start_lr: 0.0002
+      warmup: 5
+      weight_decay: 0.008
+    - final_lr: 0.0
+      final_weight_decay: 0.004
+      lr: 0.0015
+      start_lr: 0.0002
+      warmup: 5
+      weight_decay: 0.004
+    - final_lr: 0.0
+      final_weight_decay: 0.002
+      lr: 0.0015
+      start_lr: 0.0002
+      warmup: 5
+      weight_decay: 0.002
+    - final_lr: 0.0
+      final_weight_decay: 0.001
+      lr: 0.0015
+      start_lr: 0.0002
+      warmup: 5
+      weight_decay: 0.001
+    - final_lr: 0.0
+      final_weight_decay: 0.0005
+      lr: 0.0015
+      start_lr: 0.0002
+      warmup: 5
+      weight_decay: 0.0005
+    - final_lr: 0.0
+      final_weight_decay: 0.008
+      lr: 0.002
+      start_lr: 0.0002
+      warmup: 5
+      weight_decay: 0.008
+    - final_lr: 0.0
+      final_weight_decay: 0.004
+      lr: 0.002
+      start_lr: 0.0002
+      warmup: 5
+      weight_decay: 0.004
+    - final_lr: 0.0
+      final_weight_decay: 0.002
+      lr: 0.002
+      start_lr: 0.0002
+      warmup: 5
+      weight_decay: 0.002
+    - final_lr: 0.0
+      final_weight_decay: 0.001
+      lr: 0.002
+      start_lr: 0.0002
+      warmup: 5
+      weight_decay: 0.001
+    - final_lr: 0.0
+      final_weight_decay: 0.0005
+      lr: 0.002
+      start_lr: 0.0002
+      warmup: 5
+      weight_decay: 0.0005
+    num_epochs: 20
+    use_bfloat16: true
+model_kwargs:
+  checkpoint: /your_vjepa2_1_checkpoints/vjepa2_1_vitb_dist_vitG_384.pt
+  module_name: evals.image_classification_frozen.modelcustom.vit_encoder
+  pretrain_kwargs:
+    encoder:
+      checkpoint_key: ema_encoder
+      img_temporal_dim_size: 1
+      model_name: vit_base
+      patch_size: 16
+      tubelet_size: 2
+      uniform_power: true
+      use_rope: true
+  wrapper_kwargs:
+    img_as_video_nframes: 16

@@ -14,7 +14,7 @@ from accelerate.utils import set_seed
 import json
 from diffusers.optimization import get_cosine_schedule_with_warmup, get_constant_schedule_with_warmup
 from regression.dit import DiT
-from utils.model_utils import print_model_params
+from get_latent_action.utils import print_model_params
 from diffusers import DDPMScheduler
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg

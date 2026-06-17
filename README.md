@@ -30,6 +30,7 @@ Given any model that produces latent action representations (LAMs or visual enco
 ---
 
 ## News
+- **[2026-06-10]** LARYBench now supports V-JEPA 2.1 and simplify the way to add new custom models. We welcome all kinds of models evaluating on LARYBench and contributing to our leaderboards!
 - **[2026-05-01]** LARYBench now supports SigLIP2, relative-action regression evaluation (`target = action_tgt - action_src`), and a fast dataset integrity checker. Happy Labor Day!
 - **[2026-04-27]** We have open-sourced all datasets on [HuggingFace](https://huggingface.co/datasets/meituan-longcat/LARYBench).
 - **[2026-04-21]** We release the general LAMs trained in ablation studies, [LAPA-DINOv3](https://huggingface.co/AGI-Eval/LAPA-DINOv3) and  [LAPA-DINOv2](https://huggingface.co/AGI-Eval/LAPA-DINOv2). Even though these models are still rough experimental prototypes, with clear flaws in both training data and methods, we’re sharing them anyway to help push latent action research forward together. Have fun~
@@ -94,11 +95,11 @@ pip install -r requirements.txt
 
 Some model families keep their original dependencies and should be configured from their upstream projects when you evaluate them:
 
-| Model family | Environment guidance |
-|---|---|
+| Model family                                                                                                                      | Environment guidance |
+|-----------------------------------------------------------------------------------------------------------------------------------|---|
 | `dinov2`, `dinov3`, `siglip2`, `dinov2-origin`, `dinov3-origin`, `siglip2-origin`, `lapa`, `magvit2`, `univla`, `flux2`, `wan2-2` | Use `larybench` |
-| `vjepa2` | Follow [facebookresearch/vjepa2](https://github.com/facebookresearch/vjepa2) and activate your `vjepa2` env |
-| `villa-x` | Follow [microsoft/villa-x](https://github.com/microsoft/villa-x) and set `VILLA_X_DIR` |
+| `vjepa2`, `vjepa2.1`                                                                                                              | Follow [facebookresearch/vjepa2](https://github.com/facebookresearch/vjepa2) and activate your `vjepa2` env |
+| `villa-x`                                                                                                                         | Follow [microsoft/villa-x](https://github.com/microsoft/villa-x) and set `VILLA_X_DIR` |
 
 Configure paths in `env.sh`, then source it before running commands. Example:
 
@@ -300,52 +301,44 @@ CUDA_VISIBLE_DEVICES=0 python -m lary.cli regress \
 
 ## Supported Models
 
-| Model key | What it extracts | Environment |
-|---|---|---|
-| `dinov2` | LAPA-DINOv2 latent actions | `larybench` |
-| `dinov3` | LAPA-DINOv3 latent actions | `larybench` |
-| `siglip2` | LAPA-SigLIP2 latent actions | `larybench` |
-| `magvit2` | Open-MAGVIT2 based latent actions | `larybench`; set `MAGVIT2_CONFIG_PATH` and `MAGVIT2_TOKENIZER_PATH` |
-| `dinov2-origin` | Raw DINOv2 visual features | `larybench` |
-| `dinov3-origin` | Raw DINOv3 visual features | `larybench` |
-| `siglip2-origin` | Raw SigLIP2 visual features | `larybench` |
-| `lapa` | LAPA / LAQ latent actions | `larybench` |
-| `univla` | UniVLA latent actions | `larybench`; set `UNIVLA_CKPT_PATH` |
-| `villa-x` | villa-X latent actions | upstream villa-X env |
-| `flux2` | FLUX.2 VAE features | `larybench`; set `AE_MODEL_PATH` |
-| `vjepa2` | V-JEPA2 video features | upstream `vjepa2` env |
-| `wan2-2` | Wan2.2 VAE features | upstream `wan` env |
+| Model key        | What it extracts                  | Environment |
+|------------------|-----------------------------------|---|
+| `dinov2`         | LAPA-DINOv2 latent actions        | `larybench` |
+| `dinov3`         | LAPA-DINOv3 latent actions        | `larybench` |
+| `siglip2`        | LAPA-SigLIP2 latent actions       | `larybench` |
+| `magvit2`        | Open-MAGVIT2 based latent actions | `larybench`; set `MAGVIT2_CONFIG_PATH` and `MAGVIT2_TOKENIZER_PATH` |
+| `dinov2-origin`  | Raw DINOv2 visual features        | `larybench` |
+| `dinov3-origin`  | Raw DINOv3 visual features        | `larybench` |
+| `siglip2-origin` | Raw SigLIP2 visual features       | `larybench` |
+| `lapa`           | LAPA / LAQ latent actions         | `larybench` |
+| `univla`         | UniVLA latent actions             | `larybench`; set `UNIVLA_CKPT_PATH` |
+| `villa-x`        | villa-X latent actions            | upstream villa-X env |
+| `flux2`          | FLUX.2 VAE features               | `larybench`; set `AE_MODEL_PATH` |
+| `vjepa2`         | V-JEPA2 video features            | upstream `vjepa2` env |
+| `vjepa2-1`       | V-JEPA2.1 video features          | upstream `vjepa2` env |
+| `wan2-2`         | Wan2.2 VAE features               | upstream `wan` env |
 
 ## Adding a Custom Model
 
 LARYBench only needs your model to convert a video or image pair into a numeric `tokens` array saved in each latent-action `.npz` file.
 
-1. Add model-specific imports in [get_latent_action/dynamics.py](get_latent_action/dynamics.py), guarded by `USE_MODEL` if the dependency is optional.
-
+1. Subclass `larybench.get_latent_action.models.base.LaryBaseModel`, implement all required methods for image/video loading, token calculation, etc. Register new model with decorator as follows and don't forget to pre-load it in `get_latent_action/models/__init__.py`
 ```python
-env_model = os.environ.get("USE_MODEL")
-if env_model == "my-model":
-    from my_project import MyModel
+@MODEL.register_module()
+class CustomClass(LaryBaseModel):
+    def __init__(self, name="my-model", param_a, param_b, ...):
 ```
-
-2. Register the model loader in `get_dynamic_tokenizer(model)`.
-
-```python
-elif model == "my-model":
-    dynamics = MyModel.from_pretrained(os.environ["MY_MODEL_CKPT"]).cuda()
+2. Add a config file containing all parameters required for model initialization under folder `configs/models/` with the filename same as model key, like `my-model.json`
+```json
+{
+  "type": "CustomClass", # class name that implement your new model
+  "name": "my-model",    # model key used in command line and the config filename 
+  "param_a": 1024,       # other parameters required to init your model
+  "param_b": 32,
+  ...
+}
 ```
-
-3. Add the forward branch in `get_latent_action(x, tokenizer, model_name)` and return either `(tokens, indices)` or `tokens`. Classification and regression use `tokens`; `tokens.shape[-1]` is the `--dim` value for classification.
-
-```python
-elif model_name == "my-model":
-    tokens = tokenizer(x)          # expected shape: (B, ..., D)
-    indices = np.array([])
-```
-
-4. If the model needs a different input format, add a matching branch in [lary/extract.py](lary/extract.py) for dataset preprocessing and batch execution. Reuse existing branches such as `dinov2-origin`, `vjepa2`, or `wan2-2` as templates.
-
-5. Set any required environment variables in `env.sh`, then run:
+3. Set any required environment variables in `env.sh`, then run:
 
 ```bash
 python -m lary.cli extract \
@@ -457,7 +450,7 @@ For any questions regarding licensing, please refer to the original dataset sour
 
 We thank the following open-source projects for their contributions:
 
-- [V-JEPA2](https://github.com/facebookresearch/vjepa2)
+- [V-JEPA2/V-JEPA2.1](https://github.com/facebookresearch/vjepa2)
 - [UniVLA](https://github.com/OpenDriveLab/UniVLA)
 - [Wan2.2](https://github.com/Wan-Video/Wan2.2)
 - [flux2](https://github.com/black-forest-labs/flux2)
