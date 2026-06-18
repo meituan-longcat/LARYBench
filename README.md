@@ -30,6 +30,7 @@ Given any model that produces latent action representations (LAMs or visual enco
 ---
 
 ## News
+- **[2026-06-18]** We release new action mode called delta-action where difference between first and last action is calculated in a physical sense. 
 - **[2026-06-10]** LARYBench now supports V-JEPA 2.1 and simplify the way to add new custom models. We welcome all kinds of models evaluating on LARYBench and contributing to our leaderboards!
 - **[2026-05-01]** LARYBench now supports SigLIP2, relative-action regression evaluation (`target = action_tgt - action_src`), and a fast dataset integrity checker. Happy Labor Day!
 - **[2026-04-27]** We have open-sourced all datasets on [HuggingFace](https://huggingface.co/datasets/meituan-longcat/LARYBench).
