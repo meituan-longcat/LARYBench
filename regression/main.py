@@ -22,6 +22,7 @@ import matplotlib.image as mpimg
 from pathlib import Path
 import random
 
+
 # ==========================================
 # 0. Dimension Labels Configuration
 # ==========================================
@@ -690,10 +691,10 @@ def evaluate(model, loader, accelerator, args, epoch, action_steps, dim_labels, 
     all_targets = torch.cat(all_targets, dim=0)
     
     val_loss_final = total_huber_loss / total_samples
-    metric_action_steps = 1 if action_mode == 'delta' else action_steps
+    metric_action_steps = 1 if args.action_mode == 'delta' else action_steps
     val_total_mse = F.mse_loss(all_preds, all_targets).item()
     val_dim_metrics = compute_per_dim_mse(all_preds, all_targets, metric_action_steps, dim_labels)
-    val_group_metrics = compute_group_mse(all_preds, all_targets, metric_action_steps, dataset_name)
+    val_group_metrics = compute_group_mse(all_preds, all_targets, metric_action_steps, args.dataset)
     
     return val_loss_final, val_total_mse, val_dim_metrics, val_group_metrics
 
