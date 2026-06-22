@@ -8,7 +8,8 @@ import torch
 import torchvision.transforms.functional as F
 
 from registry import MODEL
-from get_latent_action.utils import print_model_params, freeze_backbone, load_video_frames, read_video_tensor
+from get_latent_action.utils import freeze_backbone, load_video_frames, read_video_tensor
+from utils.model_utils import print_model_params
 model_dir = os.environ.get("MODEL_DIR")
 
 

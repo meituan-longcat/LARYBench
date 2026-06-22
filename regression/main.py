@@ -21,7 +21,7 @@ from regression.action_chunk import (
     delta_to_absolute_last_action,
     to_delta_action_target,
 )
-from get_latent_action.utils import print_model_params
+from utils.model_utils import print_model_params
 from diffusers import DDPMScheduler
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg

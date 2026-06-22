@@ -25,7 +25,8 @@ from classification.src.utils.checkpoint_loader import robust_checkpoint_loader
 from classification.src.utils.distributed import AllReduce, init_distributed
 from classification.src.utils.logging import AverageMeter, CSVLogger
 import wandb 
-from get_latent_action.utils import print_model_params
+from utils.model_utils import print_model_params
+
 
 # --- Configuration & Setup ---
 logging.basicConfig()
