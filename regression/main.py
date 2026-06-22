@@ -14,7 +14,13 @@ from accelerate.utils import set_seed
 import json
 from diffusers.optimization import get_cosine_schedule_with_warmup, get_constant_schedule_with_warmup
 from regression.dit import DiT
-from regression.action_chunk import canonicalize_absolute_action, delta_to_absolute_last_action, to_delta_action_target
+from regression.action_chunk import (
+    DATASET_ARM_SPECS,
+    DATASET_GRIPPER_SPECS,
+    canonicalize_absolute_action,
+    delta_to_absolute_last_action,
+    to_delta_action_target,
+)
 from get_latent_action.utils import print_model_params
 from diffusers import DDPMScheduler
 import matplotlib.pyplot as plt
@@ -266,6 +272,126 @@ def compute_group_mse(pred, target, action_steps, dataset_name):
     for group_name, indices in group_indices.items():
         result[f"mse_{group_name}"] = squared_diff[:, :, indices].mean().item()
     return result
+
+
+def denormalize_action(action, a_mean, a_std):
+    return (action * a_std) + a_mean
+
+def _euler_xyz_to_matrix(euler):
+    x, y, z = euler.unbind(dim=-1)
+    cx, sx = torch.cos(x), torch.sin(x)
+    cy, sy = torch.cos(y), torch.sin(y)
+    cz, sz = torch.cos(z), torch.sin(z)
+
+    row0 = torch.stack([cz * cy, cz * sy * sx - sz * cx, cz * sy * cx + sz * sx], dim=-1)
+    row1 = torch.stack([sz * cy, sz * sy * sx + cz * cx, sz * sy * cx - cz * sx], dim=-1)
+    row2 = torch.stack([-sy, cy * sx, cy * cx], dim=-1)
+    return torch.stack([row0, row1, row2], dim=-2)
+
+def _quat_xyzw_to_matrix(quat):
+    quat = quat / quat.norm(dim=-1, keepdim=True).clamp_min(1e-8)
+    x, y, z, w = quat.unbind(dim=-1)
+    two = 2.0
+
+    row0 = torch.stack([1 - two * (y * y + z * z), two * (x * y - z * w), two * (x * z + y * w)], dim=-1)
+    row1 = torch.stack([two * (x * y + z * w), 1 - two * (x * x + z * z), two * (y * z - x * w)], dim=-1)
+    row2 = torch.stack([two * (x * z - y * w), two * (y * z + x * w), 1 - two * (x * x + y * y)], dim=-1)
+    return torch.stack([row0, row1, row2], dim=-2)
+
+def _rotation_to_matrix(rotation, spec):
+    if spec.rotation_type == "quat":
+        return _quat_xyzw_to_matrix(rotation)
+    if spec.rotation_type == "euler":
+        if (spec.rotation_order or "xyz").lower() != "xyz":
+            raise ValueError(f"Unsupported euler rotation order for metrics: {spec.rotation_order}")
+        return _euler_xyz_to_matrix(rotation)
+    if spec.rotation_type == "rotvec":
+        angle = rotation.norm(dim=-1, keepdim=True)
+        axis = rotation / angle.clamp_min(1e-8)
+        x, y, z = axis.unbind(dim=-1)
+        zero = torch.zeros_like(x)
+        skew = torch.stack(
+            [
+                torch.stack([zero, -z, y], dim=-1),
+                torch.stack([z, zero, -x], dim=-1),
+                torch.stack([-y, x, zero], dim=-1),
+            ],
+            dim=-2,
+        )
+        eye = torch.eye(3, device=rotation.device, dtype=rotation.dtype).expand(rotation.shape[:-1] + (3, 3))
+        sin = torch.sin(angle)[..., None]
+        cos = torch.cos(angle)[..., None]
+        return eye + sin * skew + (1 - cos) * torch.matmul(skew, skew)
+    raise ValueError(f"Unsupported rotation type for metrics: {spec.rotation_type}")
+
+def _rotation_geodesic_error(pred_rotation, target_rotation, spec):
+    pred_matrix = _rotation_to_matrix(pred_rotation, spec)
+    target_matrix = _rotation_to_matrix(target_rotation, spec)
+    rel = torch.matmul(pred_matrix.transpose(-1, -2), target_matrix)
+    trace = rel.diagonal(offset=0, dim1=-1, dim2=-2).sum(dim=-1)
+    cos_theta = ((trace - 1.0) * 0.5).clamp(-1.0, 1.0)
+    return torch.acos(cos_theta)
+
+def compute_physical_action_metrics(pred, target, action_steps, dataset_name):
+    """Compute physically meaningful metrics on denormalized action vectors.
+
+    Position is squared Euclidean translation error, orientation is squared SO(3)
+    geodesic angle in rad^2, and gripper is scalar/vector MSE.
+    """
+    dataset_key = dataset_name.lower()
+    arm_specs = DATASET_ARM_SPECS.get(dataset_key)
+    if not arm_specs:
+        return {}
+
+    action_dim = get_action_dim(dataset_name)
+    pred = pred.view(-1, action_steps, action_dim)
+    target = target.view(-1, action_steps, action_dim)
+    metrics = {}
+
+    pos_errors, rot_errors = [], []
+    for arm_idx, spec in enumerate(arm_specs):
+        pos_se = (pred[:, :, spec.position] - target[:, :, spec.position]).pow(2).sum(dim=-1)
+        rot_angle = _rotation_geodesic_error(pred[:, :, spec.rotation], target[:, :, spec.rotation], spec)
+        pos_errors.append(pos_se)
+        rot_errors.append(rot_angle.pow(2))
+        suffix = "" if len(arm_specs) == 1 else f"_arm{arm_idx}"
+        metrics[f"phys/mse_position{suffix}"] = pos_se.mean().item()
+        metrics[f"phys/mse_orientation_rad2{suffix}"] = rot_angle.pow(2).mean().item()
+        metrics[f"phys/mae_orientation_rad{suffix}"] = rot_angle.mean().item()
+        metrics[f"phys/mae_orientation_deg{suffix}"] = torch.rad2deg(rot_angle).mean().item()
+
+    position_mse = torch.stack(pos_errors, dim=0).mean()
+    orientation_mse = torch.stack(rot_errors, dim=0).mean()
+    metrics["phys/mse_position"] = position_mse.item()
+    metrics["phys/mse_orientation_rad2"] = orientation_mse.item()
+
+    total_terms = [position_mse, orientation_mse]
+    gripper_slices = DATASET_GRIPPER_SPECS.get(dataset_key, [])
+    if gripper_slices:
+        gripper_se = torch.cat([(pred[:, :, s] - target[:, :, s]).pow(2).reshape(-1) for s in gripper_slices])
+        gripper_mse = gripper_se.mean()
+        metrics["phys/mse_gripper"] = gripper_mse.item()
+        total_terms.append(gripper_mse)
+
+    metrics["phys/se3_mse"] = (position_mse + orientation_mse).item()
+    metrics["phys/balanced_mse"] = torch.stack(total_terms).mean().item()
+    return metrics
+
+def compute_eval_metrics(pred_norm, target_norm, pred_phys, target_phys, action_steps, dim_labels, dataset_name):
+    metrics = {"norm/mse": F.mse_loss(pred_norm, target_norm).item()}
+    for k, v in compute_per_dim_mse(pred_norm, target_norm, action_steps, dim_labels).items():
+        metrics[f"norm/mse_{k}"] = v
+    for k, v in compute_group_mse(pred_norm, target_norm, action_steps, dataset_name).items():
+        metrics[f"norm/{k}"] = v
+
+    metrics["phys/vector_mse"] = F.mse_loss(pred_phys, target_phys).item()
+    for k, v in compute_per_dim_mse(pred_phys, target_phys, action_steps, dim_labels).items():
+        metrics[f"phys/vector_mse_{k}"] = v
+    for k, v in compute_group_mse(pred_phys, target_phys, action_steps, dataset_name).items():
+        metrics[f"phys/vector_{k}"] = v
+    metrics.update(compute_physical_action_metrics(pred_phys, target_phys, action_steps, dataset_name))
+    return metrics
+
 
 # ==========================================
 # 1. Dataset Definition
@@ -606,8 +732,7 @@ def delta_batch_to_absolute_last(pred_delta, first_action, dataset_name, action_
 def prepare_metric_actions(pred_action, action, a_mean, a_std, first_action, last_action, args):
     action_mode = args.action_mode
     dataset_name = args.dataset
-    loss_type = args.loss_type
-    if action_mode != 'delta' or loss_type == 'norm-mse':
+    if action_mode != 'delta':
         return pred_action, action
     if first_action is None or last_action is None:
         raise ValueError("Delta evaluation requires first and last absolute actions in the batch.")
@@ -634,7 +759,8 @@ def evaluate(model, loader, accelerator, args, epoch, action_steps, dim_labels, 
     save_dir = args.save_dir
 
     model.eval()
-    all_preds, all_targets = [], []
+    all_norm_preds, all_norm_targets = [], []
+    all_phys_preds, all_phys_targets = [], []
     total_huber_loss, total_samples = 0.0, 0
     unwrapped_model = accelerator.unwrap_model(model)
     
@@ -656,18 +782,25 @@ def evaluate(model, loader, accelerator, args, epoch, action_steps, dim_labels, 
             total_huber_loss += accelerator.gather(h_loss).mean().item()
             total_samples += 1
 
-            metric_pred, metric_target = prepare_metric_actions(
-                pred_action,
-                action,
-                a_mean,
-                a_std,
-                first_action,
-                last_action,
-                args
-            )
+            norm_pred, norm_target = pred_action, action
+            if args.action_mode == 'delta':
+                phys_pred, phys_target = prepare_metric_actions(
+                    pred_action,
+                    action,
+                    a_mean,
+                    a_std,
+                    first_action,
+                    last_action,
+                    args
+                )
+            else:
+                phys_pred = denormalize_action(pred_action, a_mean, a_std)
+                phys_target = denormalize_action(action, a_mean, a_std)
 
-            all_preds.append(accelerator.gather_for_metrics(metric_pred))
-            all_targets.append(accelerator.gather_for_metrics(metric_target))
+            all_norm_preds.append(accelerator.gather_for_metrics(norm_pred))
+            all_norm_targets.append(accelerator.gather_for_metrics(norm_target))
+            all_phys_preds.append(accelerator.gather_for_metrics(phys_pred))
+            all_phys_targets.append(accelerator.gather_for_metrics(phys_target))
 
             if step == 0 and accelerator.is_local_main_process:
                 current_batch_size = pred_action.shape[0]
@@ -687,16 +820,26 @@ def evaluate(model, loader, accelerator, args, epoch, action_steps, dim_labels, 
                         sample_idx=i  # 使用循环索引 i 作为 sample_idx，确保保存的文件名不冲突
                     )
             
-    all_preds = torch.cat(all_preds, dim=0)
-    all_targets = torch.cat(all_targets, dim=0)
+    all_norm_preds = torch.cat(all_norm_preds, dim=0)
+    all_norm_targets = torch.cat(all_norm_targets, dim=0)
+    all_phys_preds = torch.cat(all_phys_preds, dim=0)
+    all_phys_targets = torch.cat(all_phys_targets, dim=0)
     
     val_loss_final = total_huber_loss / total_samples
     metric_action_steps = 1 if args.action_mode == 'delta' else action_steps
-    val_total_mse = F.mse_loss(all_preds, all_targets).item()
-    val_dim_metrics = compute_per_dim_mse(all_preds, all_targets, metric_action_steps, dim_labels)
-    val_group_metrics = compute_group_mse(all_preds, all_targets, metric_action_steps, args.dataset)
-    
-    return val_loss_final, val_total_mse, val_dim_metrics, val_group_metrics
+    metric_dim_labels = dim_labels if args.action_mode != 'delta' else dim_labels[: get_action_dim(args.dataset)]
+    metrics = compute_eval_metrics(
+        all_norm_preds,
+        all_norm_targets,
+        all_phys_preds,
+        all_phys_targets,
+        metric_action_steps,
+        metric_dim_labels,
+        args.dataset,
+    )
+    val_total_mse = metrics["norm/mse"]
+
+    return val_loss_final, val_total_mse, metrics
 
 # ==========================================
 # 4. Main Execution
@@ -732,9 +875,6 @@ def main():
     parser.add_argument('--action_mode', type=str, default='absolute', choices=['absolute', 'relative', 'delta'],
                         help="absolute predicts the full action chunk; relative predicts last action minus first action; "
                              "delta predicts the last end-pose action relative to the first pose.")
-    parser.add_argument('--loss_type', type=str, default='norm-mse', choices=['norm-mse'],
-                        help="loss type defined for delta action mode only. norm-mse calculates the mse loss of "
-                             "delta action after normalization")
     parser.add_argument('--action_data_root', type=str, default=None,
                         help="Optional LARYBench data root. Relative/delta modes read precomputed action files under this root.")
     parser.add_argument('--dit_hidden_size', type=int, default=512)
@@ -844,65 +984,83 @@ def main():
     model, optimizer, train_loader, val_loader, scheduler = accelerator.prepare(model, optimizer, train_loader, val_loader, scheduler)
     if val_unseen_loader: val_unseen_loader = accelerator.prepare(val_unseen_loader)
 
-    best_val_mse = float('inf')
+    best_val_loss = float('inf')
     best_result = {}  # 用于记录最佳结果
     for epoch in range(1, args.epochs + 1):
         train_loss = train_one_epoch(model, train_loader, optimizer, scheduler, accelerator, epoch, args.model_type, action_steps, dim_labels)
-        val_loss, val_mse, val_dim_metrics, val_group_metrics = evaluate(model, val_loader, accelerator, args, epoch, action_steps, dim_labels, prefix="val_seen")
+        val_loss, val_mse, val_metrics = evaluate(model, val_loader, accelerator, args, epoch, action_steps, dim_labels, prefix="val_seen")
         
         if val_unseen_loader:
-            u_val_loss, u_val_mse, u_val_dim_metrics, u_val_group_metrics = evaluate(model, val_unseen_loader, accelerator, args, epoch, action_steps, dim_labels, prefix="val_unseen")
-    
+            u_val_loss, u_val_mse, u_val_metrics = evaluate(model, val_unseen_loader, accelerator, args, epoch, action_steps, dim_labels, prefix="val_unseen")
+
         if accelerator.is_local_main_process:
-            log_dict = {"loss/train": train_loss, "loss/val_seen": val_loss, "val_seen/mse": val_mse, "epoch": epoch, "lr": optimizer.param_groups[0]['lr']}
-            for k, v in val_dim_metrics.items(): log_dict[f"val_seen/mse_{k}"] = v
-            for k, v in val_group_metrics.items(): log_dict[f"val_seen/{k}"] = v
-            
+            log_dict = {
+                "loss/train": train_loss,
+                "loss/val_seen": val_loss,
+                "val_seen/mse": val_mse,
+                "val_seen/checkpoint_metric": val_loss,
+                "epoch": epoch,
+                "lr": optimizer.param_groups[0]['lr'],
+            }
+            for k, v in val_metrics.items():
+                log_dict[f"val_seen/{k}"] = v
+
             if val_unseen_loader:
                 log_dict.update({"loss/val_unseen": u_val_loss, "val_unseen/mse": u_val_mse})
-                for k, v in u_val_dim_metrics.items(): log_dict[f"val_unseen/mse_{k}"] = v
-                for k, v in u_val_group_metrics.items(): log_dict[f"val_unseen/{k}"] = v
+                for k, v in u_val_metrics.items():
+                    log_dict[f"val_unseen/{k}"] = v
 
             wandb.log(log_dict)
             
-            print(f"Epoch {epoch} | Train Loss: {train_loss:.4f} | Val Seen Loss: {val_loss:.4f} | Val Seen MSE: {val_mse:.4f}")
-            if val_group_metrics:
-                group_str = "  ".join([f"{k}: {v:.4f}" for k, v in val_group_metrics.items()])
-                print(f"          | Val Seen Groups -> {group_str}")
+            print(
+                f"Epoch {epoch} | Train Loss: {train_loss:.4f} | Val Seen Loss: {val_loss:.4f} "
+                f"| Norm MSE: {val_metrics.get('norm/mse', val_mse):.4f} "
+                f"| Phys vector MSE: {val_metrics.get('phys/vector_mse', float('nan')):.4f}"
+                f"| Phys Balanced MSE: {val_metrics.get('phys/balanced_mse', float('nan')):.4f}"
+            )
+            phys_keys = ["phys/mse_position", "phys/mse_orientation_rad2", "phys/mse_gripper", "phys/se3_mse"]
+            phys_str = "  ".join([f"{k}: {val_metrics[k]:.4f}" for k in phys_keys if k in val_metrics])
+            if phys_str:
+                print(f"          | Val Seen Physical -> {phys_str}")
             if val_unseen_loader:
-                print(f"          | Val Unseen Loss: {u_val_loss:.4f} | Val Unseen MSE: {u_val_mse:.4f}")
-                if u_val_group_metrics:
-                    u_group_str = "  ".join([f"{k}: {v:.4f}" for k, v in u_val_group_metrics.items()])
-                    print(f"          | Val Unseen Groups -> {u_group_str}")
+                print(
+                    f"          | Val Unseen Loss: {u_val_loss:.4f} "
+                    f"| Norm MSE: {u_val_metrics.get('norm/mse', u_val_mse):.4f} "
+                    f"| Phys Balanced MSE: {u_val_metrics.get('phys/balanced_mse', float('nan')):.4f}"
+                )
+                u_phys_str = "  ".join([f"{k}: {u_val_metrics[k]:.4f}" for k in phys_keys if k in u_val_metrics])
+                if u_phys_str:
+                    print(f"          | Val Unseen Physical -> {u_phys_str}")
 
-            if val_mse < best_val_mse:
-                best_val_mse = val_mse
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
                 torch.save({'model_state_dict': accelerator.unwrap_model(model).state_dict()}, os.path.join(args.save_dir, "best_model.pth"))
                 # 记录最佳结果
                 best_result = {
                     "best_epoch": epoch,
+                    "checkpoint_metric": val_loss,
                     "train_loss": train_loss,
                     "val_seen_loss": val_loss,
                     "val_seen_mse": val_mse,
                 }
-                for k, v in val_dim_metrics.items():
-                    best_result[f"val_seen_mse_{k}"] = v
-                for k, v in val_group_metrics.items():
-                    best_result[f"val_seen_{k}"] = v
+                for k, v in val_metrics.items():
+                    best_result[f"val_seen_{k.replace('/', '_')}"] = v
                 if val_unseen_loader:
                     best_result["val_unseen_loss"] = u_val_loss
                     best_result["val_unseen_mse"] = u_val_mse
-                    for k, v in u_val_dim_metrics.items():
-                        best_result[f"val_unseen_mse_{k}"] = v
-                    for k, v in u_val_group_metrics.items():
-                        best_result[f"val_unseen_{k}"] = v
+                    for k, v in u_val_metrics.items():
+                        best_result[f"val_unseen_{k.replace('/', '_')}"] = v
     
     # 训练结束后将最佳结果保存到 CSV
     if accelerator.is_local_main_process and best_result:
         best_csv_path = os.path.join(args.save_dir, "best_result.csv")
         pd.DataFrame([best_result]).to_csv(best_csv_path, index=False)
         print(f"\nBest result saved to {best_csv_path}")
-        print(f"Best Epoch: {best_result['best_epoch']} | Val Seen Loss: {best_result['val_seen_loss']:.4f} | Val Seen MSE: {best_result['val_seen_mse']:.4f}")
+        print(
+            f"Best Epoch: {best_result['best_epoch']} | "
+            f"Best Val Seen Loss: {best_result['val_seen_loss']:.4f} | "
+            f"Val Seen MSE: {best_result['val_seen_mse']:.4f}"
+        )
 
     if accelerator.is_local_main_process:
         wandb.finish()

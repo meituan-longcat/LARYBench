@@ -344,9 +344,9 @@ def run_classify(args) -> None:
     # Build devices list
     devices = [f"cuda:{g}" for g in args.gpus.split(",")]
 
-    project_root = Path(__file__).resolve().parents[1]
-    train_csv = str(project_root / "data" / f"train_la_{args.dataset}_{args.model}.csv")
-    val_csv = str(project_root / "data" / f"val_la_{args.dataset}_{args.model}.csv")
+    project_root = str(config.paths.project_root)
+    train_csv = str(config.paths.project_root / "data" / f"train_la_{args.dataset}_{args.model}.csv")
+    val_csv = str(config.paths.project_root / "data" / f"val_la_{args.dataset}_{args.model}.csv")
     if not args.skip_preflight:
         preflight_latent_actions([train_csv, val_csv])
 
