@@ -30,7 +30,7 @@ Given any model that produces latent action representations (LAMs or visual enco
 ---
 
 ## News
-- **[2026-06-18]** We release new action mode called delta-action where difference between first and last action is calculated in a physical sense. 
+- **[2026-06-22]** We release new action mode called delta-action where difference between first and last action is calculated in a physical sense along with new evaluation metrics which also have physical meaning. 
 - **[2026-06-10]** LARYBench now supports V-JEPA 2.1 and simplify the way to add new custom models. We welcome all kinds of models evaluating on LARYBench and contributing to our leaderboards!
 - **[2026-05-01]** LARYBench now supports SigLIP2, relative-action regression evaluation (`target = action_tgt - action_src`), and a fast dataset integrity checker. Happy Labor Day!
 - **[2026-04-27]** We have open-sourced all datasets on [HuggingFace](https://huggingface.co/datasets/meituan-longcat/LARYBench).
@@ -224,11 +224,13 @@ python -m lary.cli extract \
 # Step 2: train the regression probe.
 # Uses CUDA_VISIBLE_DEVICES; one visible GPU means single-card training, multiple visible GPUs use accelerate.
 # Keep --dataset and --stride consistent with the extracted CSV names.
+# Available --action-mode includes absolute | relative | delta
 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python -m lary.cli regress \
   --model dinov2 \
   --dataset calvin \
   --stride 5 \
   --model-type mlp
+  --action-mode absolute
 ```
 
 The extraction step writes latent-action `.npz` files under `$LARY_LA_DIR` and CSVs such as `data/train_la_calvin_5_dinov2.csv`. Regression logs and metrics are written under `$LARY_LOG_DIR/regression/`.
@@ -273,13 +275,14 @@ python -m lary.cli classify \
 
 Classification outputs are written under `$LARY_LOG_DIR/classification/`.
 
-## Relative-Action Regression
+## Relative/Delta-Action Regression
 
-Absolute regression predicts the absolute action chunk. Relative regression predicts relative motion between two frames. Generate non-overwriting relative-action files first:
+Absolute regression predicts the absolute action chunk. Relative regression predicts relative motion between two frames. Delta regression predicts the difference between the 1st and last frames in physics sense. Generate non-overwriting relative-action/delta-action files first designated by action-mode options:
 
 ```bash
 python utils/prepare_relative_actions.py \
   --dataset calvin \
+  --cation-mode [relative | delta ] \
   --input-root $DATA_DIR \
   --output-root $DATA_DIR \
   --csv data/train_la_calvin_5_dinov2.csv \
