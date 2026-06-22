@@ -1,12 +1,17 @@
 import argparse
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 import json
 import os
 from pathlib import Path
+import sys
 
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from regression.action_chunk import to_delta_action_target
 
 
 ACTION_DIMS = {
@@ -96,6 +101,16 @@ def relative_data_root(base_root, dataset, split):
     return root
 
 
+def transformed_data_root(base_root, dataset, split, action_mode):
+    dataset_key = dataset.lower()
+    leaf = "regression_delta" if action_mode == "delta" else "regression_relative"
+    root = Path(base_root) / leaf / DATASET_SUBDIR.get(dataset_key, dataset_key)
+    split_dir = SPLIT_DIR.get((dataset_key, split.lower()))
+    if split_dir:
+        root = root / split_dir
+    return root
+
+
 def resolve_action_path(root, value):
     path = Path(str(value))
     if path.is_absolute():
@@ -114,6 +129,12 @@ def relative_action(action, action_dim):
     return (seq[-1] - seq[0]).astype(np.float32)
 
 
+def transformed_action(action, dataset, action_dim, action_mode):
+    if action_mode == "delta":
+        return to_delta_action_target(action, dataset, action_dim)
+    return relative_action(action, action_dim)
+
+
 def output_path(src_path, src_root, dst_root):
     try:
         rel = src_path.relative_to(src_root)
@@ -122,23 +143,28 @@ def output_path(src_path, src_root, dst_root):
     return dst_root / rel
 
 
-def process_action(value, src_root, dst_root, action_dim, overwrite=False):
+def process_action(value, src_root, dst_root, dataset, action_dim, action_mode, overwrite=False):
     src = resolve_action_path(src_root, value)
     dst = output_path(src, src_root, dst_root)
     if dst.exists() and not overwrite:
         return np.load(dst), False
 
     action = np.load(src)
-    rel = relative_action(action, action_dim)
+    rel = transformed_action(action, dataset, action_dim, action_mode)
     dst.parent.mkdir(parents=True, exist_ok=True)
     np.save(dst, rel)
     return rel, True
 
 
-def process_csv(csv_path, dataset, input_root, output_root, overwrite=False, workers=1):
+def process_action_item(item):
+    idx, value, src_root, dst_root, dataset, action_dim, action_mode, overwrite = item
+    return idx, process_action(value, src_root, dst_root, dataset, action_dim, action_mode, overwrite)
+
+
+def process_csv(csv_path, dataset, input_root, output_root, action_mode="relative", overwrite=False, workers=1, executor_type="thread"):
     split = split_from_csv_name(csv_path)
     src_root = data_root(input_root, dataset, split)
-    dst_root = relative_data_root(output_root, dataset, split)
+    dst_root = transformed_data_root(output_root, dataset, split, action_mode)
     action_dim = ACTION_DIMS[dataset.lower()]
     df = pd.read_csv(csv_path)
     if "action" not in df.columns:
@@ -170,17 +196,21 @@ def process_csv(csv_path, dataset, input_root, output_root, overwrite=False, wor
 
     if workers <= 1:
         iterator = (
-            (idx, process_action(value, src_root, dst_root, action_dim, overwrite))
+            (idx, process_action(value, src_root, dst_root, dataset, action_dim, action_mode, overwrite))
             for idx, value in enumerate(values)
         )
         for idx, result in tqdm(iterator, total=len(values), desc=f"{Path(csv_path).name}"):
             handle_result(idx, result)
     else:
-        with ThreadPoolExecutor(max_workers=workers) as executor:
+        executor_cls = ProcessPoolExecutor if executor_type == "process" else ThreadPoolExecutor
+        with executor_cls(max_workers=workers) as executor:
             futures = (
                 executor.map(
-                    lambda item: (item[0], process_action(item[1], src_root, dst_root, action_dim, overwrite)),
-                    enumerate(values),
+                    process_action_item,
+                    (
+                        (idx, value, src_root, dst_root, dataset, action_dim, action_mode, overwrite)
+                        for idx, value in enumerate(values)
+                    ),
                 )
             )
             for idx, result in tqdm(futures, total=len(values), desc=f"{Path(csv_path).name}"):
@@ -189,6 +219,7 @@ def process_csv(csv_path, dataset, input_root, output_root, overwrite=False, wor
     return {
         "csv": str(csv_path),
         "split": split,
+        "action_mode": action_mode,
         "source_root": str(src_root),
         "output_root": str(dst_root),
         "written": written,
@@ -206,17 +237,22 @@ def merge_robot_stats(results, dataset):
     return merged
 
 
-def write_stats(results, dataset, output_root):
+def write_stats(results, dataset, output_root, action_mode="relative"):
     dataset_key = dataset.lower()
-    stats_dir = Path(output_root) / "regression_relative" / DATASET_SUBDIR.get(dataset_key, dataset_key)
+    leaf = "regression_delta" if action_mode == "delta" else "regression_relative"
+    stats_dir = Path(output_root) / leaf / DATASET_SUBDIR.get(dataset_key, dataset_key)
     stats_dir.mkdir(parents=True, exist_ok=True)
     train_stats = [item["stats"] for item in results if item["stats"]]
     if not train_stats:
         return None
 
     payload = {
-        "action_mode": "relative",
-        "definition": "last action step minus first action step",
+        "action_mode": action_mode,
+        "definition": (
+            "last end-pose action relative to the first pose"
+            if action_mode == "delta"
+            else "last action step minus first action step"
+        ),
         "dataset": dataset,
     }
     if dataset_key in {"agibotbeta", "robocoin"}:
@@ -224,24 +260,28 @@ def write_stats(results, dataset, output_root):
     else:
         payload.update(train_stats[0])
 
-    stats_path = stats_dir / f"relative_action_stats_{dataset_key}.json"
+    stats_path = stats_dir / f"{action_mode}_action_stats_{dataset_key}.json"
     with stats_path.open("w") as f:
         json.dump(payload, f, indent=2)
     return stats_path
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Generate non-overwriting relative-action files for regression.")
+    parser = argparse.ArgumentParser(description="Generate non-overwriting relative/delta-action files for regression.")
     parser.add_argument("--dataset", required=True, choices=sorted(ACTION_DIMS))
+    parser.add_argument("--action-mode", choices=["relative", "delta"], default="relative",
+                        help="Target action transform to precompute.")
     parser.add_argument("--input-root", default=os.environ.get("DATA_DIR"),
                         help="LARYBench data root containing regression/. Defaults to DATA_DIR.")
     parser.add_argument("--output-root", default=None,
-                        help="LARYBench data root to write into. Defaults to --input-root and creates regression_relative/<dataset>/.")
+                        help="LARYBench data root to write into. Defaults to --input-root and creates regression_<mode>/<dataset>/.")
     parser.add_argument("--csv", action="append", required=True,
                         help="Metadata or latent-action CSV. Pass multiple --csv values for train/val/unseen.")
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--workers", type=int, default=8,
                         help="Number of worker threads for npy read/write conversion.")
+    parser.add_argument("--executor", choices=["thread", "process"], default="thread",
+                        help="Use process workers for CPU-heavy delta conversion.")
     args = parser.parse_args()
 
     if not args.input_root:
@@ -256,11 +296,13 @@ def main():
             args.dataset,
             args.input_root,
             args.output_root,
+            args.action_mode,
             args.overwrite,
             workers=args.workers,
+            executor_type=args.executor,
         ))
 
-    stats_path = write_stats(results, args.dataset, args.output_root)
+    stats_path = write_stats(results, args.dataset, args.output_root, args.action_mode)
     print(json.dumps({"results": results, "stats_path": str(stats_path) if stats_path else None}, indent=2))
 
 

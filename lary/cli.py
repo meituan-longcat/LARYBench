@@ -100,8 +100,8 @@ Examples:
                                 help="Stride for frame sampling")
     regress_parser.add_argument("--model-type", type=str, required=True,
                                 help="Model type for regression")
-    regress_parser.add_argument("--action-mode", type=str, default="absolute", choices=["absolute", "relative"],
-                                help="Regression target: full absolute action chunk or relative last-minus-first action.")
+    regress_parser.add_argument("--action-mode", type=str, default="absolute", choices=["absolute", "relative", "delta"],
+                                help="Regression target: full absolute action chunk; relative last-minus-first action; delta last-minus-first action with physical meaning")
     regress_parser.add_argument("--action-data-root", type=str, default=None,
                                 help="Optional LARYBench data root. Relative mode reads regression_relative/<dataset>/ under this root.")
     regress_parser.add_argument("--batch-size", type=int, default=256)
@@ -344,9 +344,9 @@ def run_classify(args) -> None:
     # Build devices list
     devices = [f"cuda:{g}" for g in args.gpus.split(",")]
 
-    project_root = Path(__file__).resolve().parents[1]
-    train_csv = str(project_root / "data" / f"train_la_{args.dataset}_{args.model}.csv")
-    val_csv = str(project_root / "data" / f"val_la_{args.dataset}_{args.model}.csv")
+    project_root = str(config.paths.project_root)
+    train_csv = str(config.paths.project_root / "data" / f"train_la_{args.dataset}_{args.model}.csv")
+    val_csv = str(config.paths.project_root / "data" / f"val_la_{args.dataset}_{args.model}.csv")
     if not args.skip_preflight:
         preflight_latent_actions([train_csv, val_csv])
 
@@ -386,13 +386,22 @@ _REGRESSION_DATA_SUBDIR = {
 }
 
 
-def _relative_stats_path(action_data_root: str, dataset: str) -> str:
+def _action_stats_path(action_data_root: str, dataset: str, action_mode: str) -> str:
     root = os.path.normpath(action_data_root)
-    if os.path.basename(root) != "regression_relative":
-        root = os.path.join(root, "regression_relative")
+    leaf = "regression_delta" if action_mode == "delta" else "regression_relative"
+    if os.path.basename(root) != leaf:
+        root = os.path.join(root, leaf)
     dataset_key = dataset.lower()
     stats_dir = os.path.join(root, _REGRESSION_DATA_SUBDIR.get(dataset_key, dataset_key))
-    return os.path.join(stats_dir, f"relative_action_stats_{dataset_key}.json")
+    return os.path.join(stats_dir, f"{action_mode}_action_stats_{dataset_key}.json")
+
+
+def _relative_stats_path(action_data_root: str, dataset: str) -> str:
+    return _action_stats_path(action_data_root, dataset, "relative")
+
+
+def _delta_stats_path(action_data_root: str, dataset: str) -> str:
+    return _action_stats_path(action_data_root, dataset, "delta")
 
 
 def run_regress(args) -> None:
@@ -438,6 +447,10 @@ def run_regress(args) -> None:
         action_root = args.action_data_root or os.environ.get("DATA_DIR")
         if action_root:
             global_stats_json = _relative_stats_path(action_root, dataset)
+    if not global_stats_json and args.action_mode == "delta":
+        action_root = args.action_data_root or os.environ.get("DATA_DIR")
+        if action_root:
+            global_stats_json = _delta_stats_path(action_root, dataset)
     if not global_stats_json and dataset in _STATS_JSON_NAME:
         data_root = get_data_root(dataset, 'seen_train')
         if data_root:
