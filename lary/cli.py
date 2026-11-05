@@ -39,7 +39,7 @@ Examples:
     # ===== Extract latent action command =====
     extract_parser = subparsers.add_parser("extract", help="Extract latent actions from video/image pairs")
     extract_parser.add_argument("--model", type=str, required=True,
-                                help="Model name: villa-x, vjepa2, wan2-2, flux2, dinov3, lapa, etc.")
+                                help="Model name: rotvla, villa-x, vjepa2, wan2-2, flux2, dinov3, lapa, etc.")
     extract_parser.add_argument("--dataset", type=str, required=True,
                                 help="Dataset name: calvin, agibotbeta, robocoin, libero, etc.")
     extract_parser.add_argument("--input", type=str,

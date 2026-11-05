@@ -192,6 +192,29 @@ class UnivlaLaryWrap(LaqBaseModel):
         return tokens.cpu().numpy(), indices.cpu().numpy()
 
 
+@MODEL.register_module()
+class RotvlaLaryWrap(LaqBaseModel):
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+        from get_latent_action.models.rotvla import SoftDINOLatentActionModel
+        self.name = kwargs.pop("name", "rotvla")
+        ckpt_path = os.environ.get("ROTVLA_CKPT_PATH", os.path.join(model_dir or "", "rotvla", "stage1_ckpt.pt"))
+        self.model = SoftDINOLatentActionModel(*args, **kwargs)
+        self.model.to('cuda')
+        ckpt = torch.load(ckpt_path, weights_only=False)["module"]
+        self.model.load_state_dict(
+            {k.replace("lam.", ""): v for k, v in ckpt.items()}, strict=True
+        )
+        self.prepare_model_for_extraction()
+
+    def _get_latent_action(self, batch_input):
+        with torch.no_grad():
+            outputs = self.model.get_latent_actions(batch_input.permute(0, 2, 1, 3, 4))
+            indices = outputs['indices']
+            tokens = outputs['z_q'].squeeze(1)
+        return tokens.cpu().numpy(), indices.cpu().numpy()
+
+
 #villa-x
 @MODEL.register_module()
 class VillaXLaryWrap(LaryBaseModel):
