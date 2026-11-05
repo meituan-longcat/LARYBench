@@ -1,0 +1,15 @@
+{
+  "type": "RotvlaLaryWrap",
+  "name": "rotvla",
+  "in_dim": 3,
+  "model_dim": 768,
+  "latent_dim": 16,
+  "num_latents": 8192,
+  "patch_size": 14,
+  "num_codes": 16,
+  "enc_blocks": 12,
+  "dec_blocks": 12,
+  "num_heads": 12,
+  "dropout": 0.0,
+  "use_identity": true
+}

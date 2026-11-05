@@ -30,6 +30,7 @@ Given any model that produces latent action representations (LAMs or visual enco
 ---
 
 ## News
+- **[2026-11-05]** LARYBench now supports [RotVLA](https://github.com/qiweili00/RotVLA) latent actions (`--model rotvla`). Weights are available on [HuggingFace](https://huggingface.co/QiweiLi/RotVLA/tree/main/LAM-Pretrain).
 - **[2026-06-10]** LARYBench now supports V-JEPA 2.1 and simplify the way to add new custom models. We welcome all kinds of models evaluating on LARYBench and contributing to our leaderboards!
 - **[2026-05-01]** LARYBench now supports SigLIP2, relative-action regression evaluation (`target = action_tgt - action_src`), and a fast dataset integrity checker. Happy Labor Day!
 - **[2026-04-27]** We have open-sourced all datasets on [HuggingFace](https://huggingface.co/datasets/meituan-longcat/LARYBench).
@@ -97,7 +98,7 @@ Some model families keep their original dependencies and should be configured fr
 
 | Model family                                                                                                                      | Environment guidance |
 |-----------------------------------------------------------------------------------------------------------------------------------|---|
-| `dinov2`, `dinov3`, `siglip2`, `dinov2-origin`, `dinov3-origin`, `siglip2-origin`, `lapa`, `magvit2`, `univla`, `flux2`, `wan2-2` | Use `larybench` |
+| `dinov2`, `dinov3`, `siglip2`, `dinov2-origin`, `dinov3-origin`, `siglip2-origin`, `lapa`, `magvit2`, `univla`, `rotvla`, `flux2`, `wan2-2` | Use `larybench` |
 | `vjepa2`, `vjepa2.1`                                                                                                              | Follow [facebookresearch/vjepa2](https://github.com/facebookresearch/vjepa2) and activate your `vjepa2` env |
 | `villa-x`                                                                                                                         | Follow [microsoft/villa-x](https://github.com/microsoft/villa-x) and set `VILLA_X_DIR` |
 
@@ -200,7 +201,7 @@ conda activate larybench
 source env.sh
 
 # Step 1: extract latent actions from image pairs.
-# --model: dinov3, siglip2, magvit2, lapa, univla, villa-x, dinov2-origin, dinov3-origin, siglip2-origin.
+# --model: dinov3, siglip2, magvit2, lapa, univla, rotvla, villa-x, dinov2-origin, dinov3-origin, siglip2-origin.
 # --stride: calvin=5, vlabench=5, agibotbeta=45, robocoin=10.
 # --split: calvin/vlabench use train,val; agibotbeta/robocoin use seen_train,seen_val.
 # Single GPU by default; use --gpus 0,1,2,3 for multi-GPU partitioned extraction.
@@ -239,7 +240,7 @@ conda activate larybench
 source env.sh
 
 # Step 1: extract latent actions from videos.
-# --model: dinov3, siglip2, magvit2, lapa, univla, villa-x, dinov2-origin, dinov3-origin, siglip2-origin.
+# --model: dinov3, siglip2, magvit2, lapa, univla, rotvla, villa-x, dinov2-origin, dinov3-origin, siglip2-origin.
 # --dataset: robot_1st, human_1st
 
 python -m lary.cli extract \
@@ -259,7 +260,7 @@ python -m lary.cli extract \
 # Step 2: train the classification probe.
 # Robot_1st has 54 classes; Human_1st has 123 classes.
 # --dim: dinov2=1024, dinov3=1024, siglip2=768, magvit2=18, 
-#        lapa=1024, univla=128, villa-x:32,
+#        lapa=1024, univla=128, rotvla=16, villa-x:32,
 #        dinov2-origin=1024, dinov3-origin=1024, vjepa2=1024,
 #        siglip2-origin=768, wan2-2=48, flux2=128
 python -m lary.cli classify \
@@ -312,6 +313,7 @@ CUDA_VISIBLE_DEVICES=0 python -m lary.cli regress \
 | `siglip2-origin` | Raw SigLIP2 visual features       | `larybench` |
 | `lapa`           | LAPA / LAQ latent actions         | `larybench` |
 | `univla`         | UniVLA latent actions             | `larybench`; set `UNIVLA_CKPT_PATH` |
+| `rotvla`         | RotVLA latent actions             | `larybench`; download `stage1_ckpt.pt` from [HuggingFace](https://huggingface.co/QiweiLi/RotVLA/tree/main/LAM-Pretrain) and set `ROTVLA_CKPT_PATH` |
 | `villa-x`        | villa-X latent actions            | upstream villa-X env |
 | `flux2`          | FLUX.2 VAE features               | `larybench`; set `AE_MODEL_PATH` |
 | `vjepa2`         | V-JEPA2 video features            | upstream `vjepa2` env |
@@ -452,6 +454,7 @@ We thank the following open-source projects for their contributions:
 
 - [V-JEPA2/V-JEPA2.1](https://github.com/facebookresearch/vjepa2)
 - [UniVLA](https://github.com/OpenDriveLab/UniVLA)
+- [RotVLA](https://github.com/qiweili00/RotVLA)
 - [Wan2.2](https://github.com/Wan-Video/Wan2.2)
 - [flux2](https://github.com/black-forest-labs/flux2)
 - [villa-x](https://github.com/microsoft/villa-x)
